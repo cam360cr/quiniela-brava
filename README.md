@@ -86,6 +86,40 @@ npm run dev
 - Para cargar resultados: logueate con `admin@demo.com` y usá la pantalla "Admin" en la web.
 - El cierre de pronóstico se respeta con `lockAt`. Si la hora pasó, no deja guardar.
 
+## Sync automatico de partidos (API externa)
+
+Se puede sincronizar fixtures/resultados desde API-FOOTBALL.
+
+Variables de entorno en `apps/api/.env`:
+
+```bash
+API_FOOTBALL_KEY=tu_api_key
+
+# Auto sync opcional
+FIXTURES_AUTO_SYNC=true
+FIXTURES_AUTO_SYNC_LEAGUE_IDS=league_id_1,league_id_2
+FIXTURES_AUTO_SYNC_INTERVAL_MIN=15
+FIXTURES_SYNC_SEASON=2026
+FIXTURES_SYNC_EXTERNAL_LEAGUE_ID=1
+```
+
+Sync manual por endpoint (OWNER o SUPERADMIN):
+
+```bash
+POST /leagues/:id/sync/fixtures
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "season": 2026,
+  "externalLeagueId": 1,
+  "from": "2026-06-11",
+  "to": "2026-07-19"
+}
+```
+
+`season`, `externalLeagueId`, `from` y `to` son opcionales.
+
 ---
 Si querés, luego se puede:
 - Agregar ligas públicas y buscador

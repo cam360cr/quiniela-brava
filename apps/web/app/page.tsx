@@ -12,7 +12,7 @@ export default function Page() {
       <>
         <Nav />
         <div className="card">
-          <h1 style={{marginTop:0}}>Quinielas</h1>
+          <h1 style={{ marginTop: 0 }}>Quiniela Brava</h1>
           <p className="small">Cargando...</p>
         </div>
       </>
@@ -23,16 +23,30 @@ export default function Page() {
     return (
       <>
         <Nav />
-        <div className="card" style={{maxWidth:720, margin:'0 auto'}}>
-          <h1 style={{marginTop:0}}>Quinielas</h1>
+        <div className="card" style={{ maxWidth: 860, margin: '0 auto' }}>
+          <h1 style={{ marginTop: 0 }}>Quiniela Brava</h1>
           <p className="small">
-            Entra a tu cuenta o crea una nueva para empezar a crear quinielas, compartir codigos y jugar.
+            Una sola cuenta para 3 modulos: Quiniela, Calendario Mundialista y Finalistas 2026.
           </p>
+          <div className="grid cols3 module-grid">
+            <div className="module-card">
+              <h3>Quiniela</h3>
+              <p className="small">Crea o unete a ligas, pronostica partidos y compite en el ranking.</p>
+            </div>
+            <div className="module-card">
+              <h3>Calendario Mundialista</h3>
+              <p className="small">Consulta grupos oficiales y fechas del Mundial FIFA 2026.</p>
+            </div>
+            <div className="module-card">
+              <h3>Finalistas</h3>
+              <p className="small">Registra tus 2 finalistas y tu campeon desde la misma cuenta.</p>
+            </div>
+          </div>
           <div className="grid cols2">
-            <Link className="btn primary" href="/login" style={{textAlign:'center', padding:'14px 18px'}}>
+            <Link className="btn primary" href="/login" style={{ textAlign: 'center', padding: '14px 18px' }}>
               Entrar
             </Link>
-            <Link className="btn" href="/register" style={{textAlign:'center', padding:'14px 18px'}}>
+            <Link className="btn" href="/register" style={{ textAlign: 'center', padding: '14px 18px' }}>
               Crear cuenta
             </Link>
           </div>
@@ -45,33 +59,47 @@ export default function Page() {
     <>
       <Nav />
       <div className="card">
-        <h1 style={{marginTop:0}}>Quinielas</h1>
+        <h1 style={{ marginTop: 0 }}>Panel Principal</h1>
         <p className="small">
-          Ya puedes entrar a tus quinielas, compartir codigos de acceso y seguir el ranking de tu grupo.
+          Elige el modulo que quieres usar. Cada seccion funciona por separado y comparte tu misma cuenta.
         </p>
-        <div className="grid cols2">
-          <div className="card" style={{marginTop:0}}>
-            <h3 style={{marginTop:0}}>Siguiente paso</h3>
-            <ol className="small">
-              <li>Crea una quiniela o unete con un codigo</li>
-              <li>Haz tus pronosticos antes del cierre</li>
-              <li>Revisa el ranking de tu quiniela</li>
-            </ol>
-            <div className="row-actions" style={{marginTop:12}}>
-              <Link className="btn primary" href="/leagues">Ir a mis quinielas</Link>
-              <Link className="btn" href="/leaderboard">Ver ranking</Link>
+
+        <div className="grid cols3 module-grid">
+          <div className="module-card">
+            <h3>Quiniela</h3>
+            <p className="small">Gestiona tus ligas, comparte codigos y carga pronosticos.</p>
+            <div className="row-actions" style={{ marginTop: 12 }}>
+              <Link className="btn primary" href="/leagues">Ir a quiniela</Link>
+              <Link className="btn" href="/leaderboard">Ranking</Link>
             </div>
           </div>
-          <div className="card" style={{marginTop:0}}>
-            <h3 style={{marginTop:0}}>Tu cuenta</h3>
-            <p className="small"><b>Usuario:</b> @{me.username}</p>
-            <p className="small"><b>Rol:</b> {me.role}</p>
-            {me.role === 'SUPERADMIN' && (
-              <div className="row-actions" style={{marginTop:12}}>
-                <Link className="btn green" href="/admin">Abrir admin</Link>
-              </div>
-            )}
+
+          <div className="module-card">
+            <h3>Calendario Mundialista</h3>
+            <p className="small">Revisa grupos oficiales, fechas y cruces del Mundial 2026.</p>
+            <div className="row-actions" style={{ marginTop: 12 }}>
+              <Link className="btn" href="/mundial-2026">Abrir calendario</Link>
+            </div>
           </div>
+
+          <div className="module-card">
+            <h3>Finalistas</h3>
+            <p className="small">Guarda tus 2 finalistas y el campeon de tu prediccion.</p>
+            <div className="row-actions" style={{ marginTop: 12 }}>
+              <Link className="btn" href="/finalistas">Abrir finalistas</Link>
+            </div>
+          </div>
+        </div>
+
+        <div className="card" style={{ marginTop: 14 }}>
+          <h3 style={{ marginTop: 0 }}>Tu cuenta</h3>
+          <p className="small"><b>Usuario:</b> @{me.username}</p>
+          <p className="small"><b>Rol:</b> {me.role}</p>
+          {me.role === 'SUPERADMIN' && (
+            <div className="row-actions" style={{ marginTop: 12 }}>
+              <Link className="btn green" href="/admin">Abrir admin por modulos</Link>
+            </div>
+          )}
         </div>
       </div>
     </>

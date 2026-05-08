@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from './prisma.js';
-import { createLeagueSchema, createMatchSchema, joinLeagueSchema, predictionSchema, setResultSchema } from './schemas.js';
+import { adminTeamSchema, createLeagueSchema, createMatchSchema, joinLeagueSchema, predictionSchema, setResultSchema, syncFixturesSchema } from './schemas.js';
 import { makeJoinCode } from './utils.js';
 import { calcPoints } from './points.js';
+import { syncLeagueFixturesFromApiFootball } from './sync.js';
 
 function isSuperadmin(req: any) {
   return (req.user as any)?.role === 'SUPERADMIN';
@@ -124,6 +125,75 @@ export async function leagueRoutes(app: FastifyInstance) {
     });
 
     return reply.send({ users });
+  });
+
+  app.get('/admin/teams', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
+    const q = String((req.query as any)?.q || '').trim();
+    const teams = await prisma.team.findMany({
+      where: q
+        ? {
+            OR: [
+              { name: { contains: q, mode: 'insensitive' } },
+              { code: { contains: q, mode: 'insensitive' } },
+            ],
+          }
+        : undefined,
+      orderBy: [{ name: 'asc' }],
+      take: 300,
+    });
+
+    return reply.send({ teams });
+  });
+
+  app.post('/admin/teams', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
+    const parsed = adminTeamSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
+    }
+
+    const name = parsed.data.name.trim();
+    const code = parsed.data.code?.trim() || null;
+    const logoUrl = parsed.data.logoUrl?.trim() || null;
+
+    if (code) {
+      const existingCode = await prisma.team.findUnique({ where: { code } });
+      if (existingCode) return reply.code(409).send({ error: 'Code already in use' });
+    }
+
+    const team = await prisma.team.create({
+      data: { name, code, logoUrl },
+    });
+
+    return reply.send({ team });
+  });
+
+  app.patch('/admin/teams/:id', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
+    const parsed = adminTeamSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
+    }
+
+    const id = (req.params as any).id as string;
+    const existing = await prisma.team.findUnique({ where: { id } });
+    if (!existing) return reply.code(404).send({ error: 'Team not found' });
+
+    const name = parsed.data.name.trim();
+    const code = parsed.data.code?.trim() || null;
+    const logoUrl = parsed.data.logoUrl?.trim() || null;
+
+    if (code) {
+      const duplicate = await prisma.team.findUnique({ where: { code } });
+      if (duplicate && duplicate.id !== id) {
+        return reply.code(409).send({ error: 'Code already in use' });
+      }
+    }
+
+    const team = await prisma.team.update({
+      where: { id },
+      data: { name, code, logoUrl },
+    });
+
+    return reply.send({ team });
   });
 
   // Detalle liga + miembros
@@ -356,5 +426,45 @@ export async function leagueRoutes(app: FastifyInstance) {
     await prisma.$transaction(updates);
 
     return reply.send({ match, updatedPredictions: preds.length });
+  });
+
+  // OWNER o SUPERADMIN: sincronizar partidos de una liga desde API externa
+  app.post('/leagues/:id/sync/fixtures', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const parsed = syncFixturesSchema.safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
+
+    const uid = (req.user as any).uid as string;
+    const leagueId = (req.params as any).id as string;
+
+    const league = await prisma.league.findUnique({ where: { id: leagueId } });
+    if (!league) return reply.code(404).send({ error: 'League not found' });
+
+    const membership = await prisma.leagueMember.findUnique({
+      where: { leagueId_userId: { leagueId, userId: uid } },
+    });
+
+    const canManage = membership?.role === 'OWNER' || isSuperadmin(req);
+    if (!canManage) return reply.code(403).send({ error: 'Only league owner or superadmin can sync fixtures' });
+
+    const season = parsed.data.season ?? 2026;
+    const externalLeagueId = parsed.data.externalLeagueId ?? 1;
+
+    try {
+      const result = await syncLeagueFixturesFromApiFootball({
+        leagueId,
+        season,
+        externalLeagueId,
+        from: parsed.data.from,
+        to: parsed.data.to,
+      });
+
+      return reply.send({ ok: true, leagueId, sync: result });
+    } catch (error: any) {
+      req.log.error({ err: error, leagueId }, 'fixtures sync failed');
+      return reply.code(502).send({
+        error: 'Sync failed',
+        message: error?.message ?? 'Provider error',
+      });
+    }
   });
 }

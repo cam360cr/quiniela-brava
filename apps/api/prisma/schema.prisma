@@ -30,6 +30,8 @@ model User {
   leagues        LeagueMember[]
   predictions    Prediction[]
   createdLeagues League[] @relation("CreatedLeagues")
+  profile        UserProfile?
+  finalPicks     FinalPick[]
 }
 
 model Team {
@@ -41,6 +43,50 @@ model Team {
 
   homeMatches Match[] @relation("HomeTeam")
   awayMatches Match[] @relation("AwayTeam")
+}
+
+model FinalistTeam {
+  id        String   @id @default(cuid())
+  name      String
+  code      String?  @unique
+  logoUrl   String?
+  createdAt DateTime @default(now())
+
+  finalist1Picks FinalPick[] @relation("Finalist1Team")
+  finalist2Picks FinalPick[] @relation("Finalist2Team")
+  championPicks  FinalPick[] @relation("ChampionTeam")
+}
+
+model UserProfile {
+  userId      String   @id
+  fullName    String
+  nationalId  String
+  phone       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([nationalId])
+}
+
+model FinalPick {
+  id              String   @id @default(cuid())
+  userId          String
+  season          Int
+  finalist1TeamId String
+  finalist2TeamId String
+  championTeamId  String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  finalist1Team FinalistTeam @relation("Finalist1Team", fields: [finalist1TeamId], references: [id])
+  finalist2Team FinalistTeam @relation("Finalist2Team", fields: [finalist2TeamId], references: [id])
+  championTeam  FinalistTeam @relation("ChampionTeam", fields: [championTeamId], references: [id])
+
+  @@unique([userId, season])
+  @@index([season])
 }
 
 model Match {

@@ -40,3 +40,26 @@ export const setResultSchema = z.object({
   finalHome: z.number().int().min(0).max(99),
   finalAway: z.number().int().min(0).max(99),
 });
+
+export const syncFixturesSchema = z.object({
+  season: z.number().int().min(2020).max(2100).optional(),
+  externalLeagueId: z.number().int().min(1).optional(),
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+export const finalPickSchema = z.object({
+  fullName: z.string().min(5).max(120),
+  nationalId: z.string().min(5).max(32),
+  phone: z.string().min(7).max(24),
+  season: z.number().int().min(2020).max(2100).optional(),
+  finalist1TeamId: z.string().min(5),
+  finalist2TeamId: z.string().min(5),
+  championTeamId: z.string().min(5),
+});
+
+export const adminTeamSchema = z.object({
+  name: z.string().min(2).max(64),
+  code: z.string().min(2).max(8).optional().nullable(),
+  logoUrl: z.string().url().optional().nullable(),
+});

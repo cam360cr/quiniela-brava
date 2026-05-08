@@ -28,6 +28,12 @@ async function main() {
       update: { name: team.name },
       create: team,
     });
+
+    await prisma.finalistTeam.upsert({
+      where: { code: team.code },
+      update: { name: team.name },
+      create: team,
+    });
   }
 
   const crc = await prisma.team.findUnique({ where: { code: 'CRC' } });
