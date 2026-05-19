@@ -2,8 +2,19 @@
 
 import { apiFetch, setToken } from './api';
 
-export async function register(email: string, username: string, password: string) {
-  return apiFetch('/auth/register', { method: 'POST', body: JSON.stringify({ email, username, password }) });
+type RegisterPayload = {
+  email: string;
+  fullName: string;
+  nationalId: string;
+  instagramUsername: string;
+  birthDate: string;
+  purchaseProofImage: string;
+  followsInstagram: boolean;
+  password: string;
+};
+
+export async function register(payload: RegisterPayload) {
+  return apiFetch('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
 }
 
 export async function login(identifier: string, password: string) {

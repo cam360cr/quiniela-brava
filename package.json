@@ -12,7 +12,8 @@
     "prisma:generate": "npm run prisma:generate -w @quiniela/api",
     "prisma:migrate": "npm run prisma:migrate -w @quiniela/api",
     "db:seed": "npm run db:seed -w @quiniela/api",
-    "db:users": "npm run db:users -w @quiniela/api"
+    "db:users": "npm run db:users -w @quiniela/api",
+    "db:teams": "npm run db:teams -w @quiniela/api"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

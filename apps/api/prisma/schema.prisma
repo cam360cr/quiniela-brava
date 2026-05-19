@@ -22,6 +22,12 @@ model User {
   id           String   @id @default(cuid())
   email        String   @unique
   username     String   @unique
+  fullName     String?
+  nationalId   String?  @unique
+  instagramUsername String?
+  birthDate    DateTime?
+  purchaseProofImage String?
+  followsInstagram Boolean @default(false)
   passwordHash String
   role         Role     @default(USER)
   createdAt    DateTime @default(now())
@@ -37,12 +43,18 @@ model User {
 model Team {
   id        String   @id @default(cuid())
   name      String
-  code      String?  @unique
+  code      String?
   logoUrl   String?
+  leagueId  String?
   createdAt DateTime @default(now())
+
+  league League? @relation(fields: [leagueId], references: [id], onDelete: Cascade)
 
   homeMatches Match[] @relation("HomeTeam")
   awayMatches Match[] @relation("AwayTeam")
+
+  @@index([leagueId, name])
+  @@unique([leagueId, code])
 }
 
 model FinalistTeam {
@@ -129,6 +141,7 @@ model League {
   members     LeagueMember[]
   matches     Match[]
   predictions Prediction[]
+  teams       Team[]
 }
 
 model LeagueMember {

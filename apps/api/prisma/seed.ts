@@ -9,39 +9,35 @@ async function main() {
   const email = 'admin@demo.com';
   const password = 'Admin123!';
   const username = 'superadmin';
+  const fullName = 'Administrador Barra Brava';
+  const nationalId = 'ADMIN-0001';
+  const birthDate = new Date('1990-01-01T00:00:00.000Z');
+  const purchaseProofImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5+3ioAAAAASUVORK5CYII=';
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (!existing) {
-    await prisma.user.create({
-      data: {
-        email,
-        username,
-        passwordHash: await bcrypt.hash(password, 10),
-        role: Role.SUPERADMIN,
-      },
-    });
-  }
-
-  for (const team of DEFAULT_TEAMS) {
-    await prisma.team.upsert({
-      where: { code: team.code },
-      update: { name: team.name },
-      create: team,
-    });
-
-    await prisma.finalistTeam.upsert({
-      where: { code: team.code },
-      update: { name: team.name },
-      create: team,
-    });
-  }
-
-  const crc = await prisma.team.findUnique({ where: { code: 'CRC' } });
-  const arg = await prisma.team.findUnique({ where: { code: 'ARG' } });
-  const esp = await prisma.team.findUnique({ where: { code: 'ESP' } });
-  const bra = await prisma.team.findUnique({ where: { code: 'BRA' } });
-
-  if (!crc || !arg || !esp || !bra) throw new Error('Teams not created');
+  await prisma.user.upsert({
+    where: { email },
+    update: {
+      username,
+      fullName,
+      nationalId,
+      birthDate,
+      purchaseProofImage,
+      followsInstagram: true,
+      passwordHash: await bcrypt.hash(password, 10),
+      role: Role.SUPERADMIN,
+    },
+    create: {
+      email,
+      username,
+      fullName,
+      nationalId,
+      birthDate,
+      purchaseProofImage,
+      followsInstagram: true,
+      passwordHash: await bcrypt.hash(password, 10),
+      role: Role.SUPERADMIN,
+    },
+  });
 
   const adminUser = await prisma.user.findUnique({ where: { email } });
   if (adminUser) {
@@ -62,6 +58,34 @@ async function main() {
         isPublic: false,
       },
     });
+
+    for (const team of DEFAULT_TEAMS) {
+      const existing = await prisma.team.findFirst({
+        where: { leagueId: league.id, code: team.code },
+      });
+
+      if (existing) {
+        await prisma.team.update({
+          where: { id: existing.id },
+          data: { name: team.name },
+        });
+      } else {
+        await prisma.team.create({
+          data: {
+            leagueId: league.id,
+            name: team.name,
+            code: team.code,
+          },
+        });
+      }
+    }
+
+    const crc = await prisma.team.findFirst({ where: { leagueId: league.id, code: 'CRC' } });
+    const arg = await prisma.team.findFirst({ where: { leagueId: league.id, code: 'ARG' } });
+    const esp = await prisma.team.findFirst({ where: { leagueId: league.id, code: 'ESP' } });
+    const bra = await prisma.team.findFirst({ where: { leagueId: league.id, code: 'BRA' } });
+
+    if (!crc || !arg || !esp || !bra) throw new Error('League teams not created');
 
     await prisma.leagueMember.upsert({
       where: { leagueId_userId: { leagueId: league.id, userId: adminUser.id } },

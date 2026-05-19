@@ -19,14 +19,14 @@ export default function Nav() {
 
       <div className="links">
         <Link className="btn" href="/mundial-2026">Mundial 2026</Link>
-        <Link className="btn" href="/finalistas">Finalistas</Link>
+        <Link className="btn" href="/premios">Premios</Link>
         {showMenu && <Link className="btn" href="/">Inicio</Link>}
         {showMenu && <Link className="btn" href="/leagues">Mis quinielas</Link>}
         {showMenu && <Link className="btn" href="/leaderboard">Ranking</Link>}
         {!loading && me?.role === 'SUPERADMIN' && <Link className="btn green" href="/admin">Admin</Link>}
         {!loading && me ? (
           <>
-            <span className="pill">@{me.username} <span className="badge">{me.role}</span></span>
+            <span className="pill">{me.fullName?.trim() || `@${me.username}`} <span className="badge">{me.role}</span></span>
             <button className="btn" onClick={() => { logout(); router.push('/login'); }}>Salir</button>
           </>
         ) : (

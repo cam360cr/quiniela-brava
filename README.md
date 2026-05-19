@@ -1,12 +1,15 @@
 # Quiniela (API + Web) — Node + TypeScript + Prisma + Postgres
 
-Este proyecto es una base **multi-quiniela** (ligas) con:
+Este proyecto es una base **multi-quiniela** enfocada en Mundial 2026, con:
 - Registro/Login (JWT)
-- Crear liga y unirse por código
-- Calendario de partidos (por torneo)
-- Pronósticos por liga
-- Carga de resultados (solo SUPERADMIN)
-- Cálculo de puntos y ranking por liga
+- Registro reforzado: cedula unica, nombre completo, fecha de nacimiento, foto de factura y confirmacion de Instagram
+- Calendario Mundial 2026 publico
+- Quinielas privadas para usuarios registrados
+- Crear quiniela (solo SUPERADMIN) y unirse por codigo
+- Pronosticos por liga
+- Carga de resultados (solo OWNER de quiniela)
+- Calculo de puntos y ranking por liga
+- Pagina de premios del ranking final
 
 ## Requisitos
 - Node.js 18+ (recomendado 20)
@@ -58,7 +61,7 @@ npm run db:seed
 Esto crea:
 - SUPERADMIN:
   - email: admin@demo.com
-  - password: admin123
+  - password: Admin123!
 - Un torneo demo con equipos y partidos.
 
 ## 6) Correr en desarrollo
@@ -83,8 +86,13 @@ npm run dev
 - WEB: http://localhost:8371
 
 ## Notas rápidas
-- Para cargar resultados: logueate con `admin@demo.com` y usá la pantalla "Admin" en la web.
+- Para cargar resultados: logueate con `admin@demo.com` y usa la pantalla "Admin" en la web.
 - El cierre de pronóstico se respeta con `lockAt`. Si la hora pasó, no deja guardar.
+- En Admin, cada quiniela tiene su propio catalogo de equipos.
+- Al crear un equipo en quiniela, la foto es obligatoria (URL o subida de archivo desde el navegador).
+- Las fotos ya usadas pueden reutilizarse desde la biblioteca de imagenes dentro de Admin.
+- La seccion Finalistas fue retirada del flujo principal.
+- Premios: de momento el primer lugar del ranking final gana USD $1000.
 
 ## Sync automatico de partidos (API externa)
 

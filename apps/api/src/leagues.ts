@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from './prisma.js';
-import { adminTeamSchema, createLeagueSchema, createMatchSchema, joinLeagueSchema, predictionSchema, setResultSchema, syncFixturesSchema } from './schemas.js';
+import { adminLeagueTeamSchema, createLeagueSchema, createMatchSchema, joinLeagueSchema, predictionSchema, setResultSchema, syncFixturesSchema } from './schemas.js';
 import { makeJoinCode } from './utils.js';
 import { calcPoints } from './points.js';
 import { syncLeagueFixturesFromApiFootball } from './sync.js';
@@ -9,17 +9,11 @@ function isSuperadmin(req: any) {
   return (req.user as any)?.role === 'SUPERADMIN';
 }
 
-async function findOrCreateTeam(name: string) {
-  const normalizedName = name.trim();
-  const existing = await prisma.team.findFirst({ where: { name: normalizedName } });
-  if (existing) return existing;
-
-  return prisma.team.create({ data: { name: normalizedName } });
-}
-
 export async function leagueRoutes(app: FastifyInstance) {
-  // Crear liga (cualquier usuario logueado)
+  // Crear quiniela (solo superadmin)
   app.post('/leagues', { preHandler: [app.authenticate] }, async (req, reply) => {
+    if (!isSuperadmin(req)) return reply.code(403).send({ error: 'Only superadmin can create leagues' });
+
     const parsed = createLeagueSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
 
@@ -74,6 +68,8 @@ export async function leagueRoutes(app: FastifyInstance) {
 
   // Mis ligas
   app.get('/leagues/mine', { preHandler: [app.authenticate] }, async (req, reply) => {
+    if (!isSuperadmin(req)) return reply.send({ leagues: [] });
+
     const uid = (req.user as any).uid as string;
 
     const leagues = await prisma.league.findMany({
@@ -89,11 +85,42 @@ export async function leagueRoutes(app: FastifyInstance) {
     return reply.send({ leagues });
   });
 
+  // Quinielas activas creadas por super admins
+  app.get('/leagues/active', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const uid = (req.user as any).uid as string;
+
+    const leagues = await prisma.league.findMany({
+      where: {
+        createdBy: {
+          role: 'SUPERADMIN',
+        },
+      },
+      include: {
+        createdBy: { select: { id: true, username: true, fullName: true } },
+        members: {
+          where: { userId: uid },
+          select: { userId: true },
+        },
+        _count: {
+          select: { members: true, matches: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const items = leagues.map((league) => ({
+      ...league,
+      isMember: league.members.length > 0,
+    }));
+
+    return reply.send({ leagues: items });
+  });
+
   // SUPERADMIN: ver todas las quinielas
   app.get('/admin/leagues', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (_req, reply) => {
     const leagues = await prisma.league.findMany({
       include: {
-        createdBy: { select: { id: true, username: true, email: true } },
+        createdBy: { select: { id: true, username: true, fullName: true, email: true } },
         _count: {
           select: { members: true, matches: true, predictions: true },
         },
@@ -111,6 +138,12 @@ export async function leagueRoutes(app: FastifyInstance) {
         id: true,
         email: true,
         username: true,
+        fullName: true,
+        nationalId: true,
+        instagramUsername: true,
+        birthDate: true,
+        followsInstagram: true,
+        purchaseProofImage: true,
         role: true,
         createdAt: true,
         _count: {
@@ -124,20 +157,29 @@ export async function leagueRoutes(app: FastifyInstance) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return reply.send({ users });
+    return reply.send({
+      users: users.map((user) => ({
+        ...user,
+        hasPurchaseProof: Boolean(user.purchaseProofImage),
+      })),
+    });
   });
 
   app.get('/admin/teams', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
+    const leagueId = String((req.query as any)?.leagueId || '').trim();
     const q = String((req.query as any)?.q || '').trim();
+
+    if (!leagueId) {
+      return reply.code(400).send({ error: 'leagueId is required' });
+    }
+
     const teams = await prisma.team.findMany({
       where: q
         ? {
-            OR: [
-              { name: { contains: q, mode: 'insensitive' } },
-              { code: { contains: q, mode: 'insensitive' } },
-            ],
+            leagueId,
+            OR: [{ name: { contains: q, mode: 'insensitive' } }, { code: { contains: q, mode: 'insensitive' } }],
           }
-        : undefined,
+        : { leagueId },
       orderBy: [{ name: 'asc' }],
       take: 300,
     });
@@ -145,30 +187,48 @@ export async function leagueRoutes(app: FastifyInstance) {
     return reply.send({ teams });
   });
 
+  app.get('/admin/team-images', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (_req, reply) => {
+    const leagueRows = await prisma.team.findMany({
+      where: { logoUrl: { not: null } },
+      select: { logoUrl: true },
+      distinct: ['logoUrl'],
+      take: 200,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const images = Array.from(new Set(leagueRows.map((row) => row.logoUrl).filter(Boolean))) as string[];
+
+    return reply.send({ images: images.slice(0, 200) });
+  });
+
   app.post('/admin/teams', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
-    const parsed = adminTeamSchema.safeParse(req.body);
+    const parsed = adminLeagueTeamSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
     }
 
+    const leagueId = parsed.data.leagueId.trim();
     const name = parsed.data.name.trim();
     const code = parsed.data.code?.trim() || null;
-    const logoUrl = parsed.data.logoUrl?.trim() || null;
+    const logoUrl = parsed.data.logoUrl.trim();
+
+    const league = await prisma.league.findUnique({ where: { id: leagueId } });
+    if (!league) return reply.code(404).send({ error: 'League not found' });
 
     if (code) {
-      const existingCode = await prisma.team.findUnique({ where: { code } });
+      const existingCode = await prisma.team.findFirst({ where: { leagueId, code } });
       if (existingCode) return reply.code(409).send({ error: 'Code already in use' });
     }
 
     const team = await prisma.team.create({
-      data: { name, code, logoUrl },
+      data: { leagueId, name, code, logoUrl },
     });
 
     return reply.send({ team });
   });
 
   app.patch('/admin/teams/:id', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
-    const parsed = adminTeamSchema.safeParse(req.body);
+    const parsed = adminLeagueTeamSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
     }
@@ -177,12 +237,17 @@ export async function leagueRoutes(app: FastifyInstance) {
     const existing = await prisma.team.findUnique({ where: { id } });
     if (!existing) return reply.code(404).send({ error: 'Team not found' });
 
+    const leagueId = parsed.data.leagueId.trim();
+    if (existing.leagueId !== leagueId) {
+      return reply.code(400).send({ error: 'Team does not belong to this league' });
+    }
+
     const name = parsed.data.name.trim();
     const code = parsed.data.code?.trim() || null;
-    const logoUrl = parsed.data.logoUrl?.trim() || null;
+    const logoUrl = parsed.data.logoUrl.trim();
 
     if (code) {
-      const duplicate = await prisma.team.findUnique({ where: { code } });
+      const duplicate = await prisma.team.findFirst({ where: { leagueId, code } });
       if (duplicate && duplicate.id !== id) {
         return reply.code(409).send({ error: 'Code already in use' });
       }
@@ -191,6 +256,97 @@ export async function leagueRoutes(app: FastifyInstance) {
     const team = await prisma.team.update({
       where: { id },
       data: { name, code, logoUrl },
+    });
+
+    return reply.send({ team });
+  });
+
+  // Equipos por quiniela (miembros pueden ver, OWNER puede crear)
+  app.get('/leagues/:id/teams', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const uid = (req.user as any).uid as string;
+    const leagueId = (req.params as any).id as string;
+    const q = String((req.query as any)?.q || '').trim();
+
+    const league = await prisma.league.findUnique({ where: { id: leagueId } });
+    if (!league) return reply.code(404).send({ error: 'League not found' });
+
+    const membership = await prisma.leagueMember.findUnique({
+      where: { leagueId_userId: { leagueId, userId: uid } },
+    });
+    if (!membership && !isSuperadmin(req)) return reply.code(403).send({ error: 'Not a member' });
+
+    const canManage = membership?.role === 'OWNER' || isSuperadmin(req);
+
+    const teams = await prisma.team.findMany({
+      where: q
+        ? {
+            leagueId,
+            OR: [{ name: { contains: q, mode: 'insensitive' } }, { code: { contains: q, mode: 'insensitive' } }],
+          }
+        : { leagueId },
+      orderBy: [{ name: 'asc' }],
+      take: 300,
+    });
+
+    return reply.send({ teams, canManage });
+  });
+
+  app.get('/leagues/:id/team-images', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const uid = (req.user as any).uid as string;
+    const leagueId = (req.params as any).id as string;
+
+    const league = await prisma.league.findUnique({ where: { id: leagueId } });
+    if (!league) return reply.code(404).send({ error: 'League not found' });
+
+    const membership = await prisma.leagueMember.findUnique({
+      where: { leagueId_userId: { leagueId, userId: uid } },
+    });
+    if (!membership && !isSuperadmin(req)) return reply.code(403).send({ error: 'Not a member' });
+
+    const rows = await prisma.team.findMany({
+      where: { logoUrl: { not: null } },
+      select: { logoUrl: true },
+      distinct: ['logoUrl'],
+      take: 200,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return reply.send({ images: rows.map((row) => row.logoUrl).filter(Boolean) });
+  });
+
+  app.post('/leagues/:id/teams', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const uid = (req.user as any).uid as string;
+    const leagueId = (req.params as any).id as string;
+
+    const parsed = adminLeagueTeamSchema.safeParse({
+      ...(req.body as Record<string, unknown>),
+      leagueId,
+    });
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
+    }
+
+    const membership = await prisma.leagueMember.findUnique({
+      where: { leagueId_userId: { leagueId, userId: uid } },
+    });
+
+    const canManage = membership?.role === 'OWNER' || isSuperadmin(req);
+    if (!canManage) return reply.code(403).send({ error: 'Forbidden' });
+
+    const league = await prisma.league.findUnique({ where: { id: leagueId } });
+    if (!league) return reply.code(404).send({ error: 'League not found' });
+
+    const name = parsed.data.name.trim();
+    const code = parsed.data.code?.trim() || null;
+    const logoUrl = parsed.data.logoUrl.trim();
+
+    if (code) {
+      const duplicate = await prisma.team.findFirst({ where: { leagueId, code } });
+      if (duplicate) return reply.code(409).send({ error: 'Code already in use' });
+    }
+
+    const team = await prisma.team.create({
+      data: { leagueId, name, code, logoUrl },
     });
 
     return reply.send({ team });
@@ -209,8 +365,8 @@ export async function leagueRoutes(app: FastifyInstance) {
     const league = await prisma.league.findUnique({
       where: { id },
       include: {
-        createdBy: { select: { id: true, username: true } },
-        members: { include: { user: { select: { id: true, username: true } } } },
+        createdBy: { select: { id: true, username: true, fullName: true } },
+        members: { include: { user: { select: { id: true, username: true, fullName: true } } } },
         _count: { select: { matches: true, predictions: true } },
       },
     });
@@ -285,10 +441,19 @@ export async function leagueRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'El cierre no puede ser despues del kickoff' });
     }
 
+    const normalizedHome = homeTeam.trim();
+    const normalizedAway = awayTeam.trim();
+
     const [home, away] = await Promise.all([
-      findOrCreateTeam(homeTeam),
-      findOrCreateTeam(awayTeam),
+      prisma.team.findFirst({ where: { leagueId, name: normalizedHome } }),
+      prisma.team.findFirst({ where: { leagueId, name: normalizedAway } }),
     ]);
+
+    if (!home || !away) {
+      return reply.code(400).send({
+        error: 'Primero registra ambos equipos en la seccion Agregar equipos de esta quiniela',
+      });
+    }
 
     const match = await prisma.match.create({
       data: {
@@ -364,7 +529,7 @@ export async function leagueRoutes(app: FastifyInstance) {
 
     const members = await prisma.leagueMember.findMany({
       where: { leagueId },
-      include: { user: { select: { id: true, username: true } } },
+      include: { user: { select: { id: true, username: true, fullName: true } } },
     });
 
     const points = await prisma.prediction.groupBy({
@@ -376,8 +541,17 @@ export async function leagueRoutes(app: FastifyInstance) {
     const map = new Map(points.map(p => [p.userId, p._sum.points ?? 0]));
 
     const leaderboard = members
-      .map(m => ({ userId: m.user.id, username: m.user.username, totalPoints: map.get(m.user.id) ?? 0 }))
-      .sort((a,b) => b.totalPoints - a.totalPoints || a.username.localeCompare(b.username));
+      .map((m) => {
+        const displayName = m.user.fullName?.trim() || `@${m.user.username}`;
+        return {
+          userId: m.user.id,
+          username: m.user.username,
+          fullName: m.user.fullName,
+          displayName,
+          totalPoints: map.get(m.user.id) ?? 0,
+        };
+      })
+      .sort((a, b) => b.totalPoints - a.totalPoints || a.displayName.localeCompare(b.displayName));
 
     return reply.send({ leaderboard });
   });

@@ -4,17 +4,48 @@ import { useEffect, useState } from 'react';
 import Nav from '../../../../components/Nav';
 import { apiFetch } from '../../../../lib/api';
 import Link from 'next/link';
+import { useMe } from '../../../../lib/hooks';
 
 export default function LeaderboardPage({ params }: { params: { id: string } }) {
   const leagueId = params.id;
-  const [rows, setRows] = useState<{username:string; totalPoints:number}[]>([]);
-  const [msg, setMsg] = useState<string|null>(null);
+  const [rows, setRows] = useState<{ username: string; fullName?: string | null; displayName?: string; totalPoints: number }[]>([]);
+  const [msg, setMsg] = useState<string | null>(null);
+  const { me, loading } = useMe();
 
   useEffect(() => {
+    if (!me) return;
     apiFetch<{leaderboard:any[]}>(`/leagues/${leagueId}/leaderboard`)
       .then(r => setRows(r.leaderboard))
       .catch(e => setMsg(e.message));
-  }, [leagueId]);
+  }, [leagueId, me?.id]);
+
+  if (loading) {
+    return (
+      <>
+        <Nav />
+        <div className="card">
+          <h2 style={{ marginTop: 0 }}>Ranking de la quiniela</h2>
+          <p className="small">Cargando...</p>
+        </div>
+      </>
+    );
+  }
+
+  if (!me) {
+    return (
+      <>
+        <Nav />
+        <div className="card" style={{ maxWidth: 760, margin: '0 auto' }}>
+          <h2 style={{ marginTop: 0 }}>Inicia sesion para ver el ranking</h2>
+          <p className="small">La informacion de quinielas solo se muestra a usuarios con cuenta.</p>
+          <div className="row-actions" style={{ marginTop: 12 }}>
+            <Link className="btn primary" href="/login">Entrar</Link>
+            <Link className="btn" href="/register">Crear cuenta</Link>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -32,7 +63,7 @@ export default function LeaderboardPage({ params }: { params: { id: string } }) 
               {rows.map((r, idx) => (
                 <tr key={r.username}>
                   <td>{idx+1}</td>
-                  <td>@{r.username}</td>
+                  <td>{r.displayName || r.fullName?.trim() || `@${r.username}`}</td>
                   <td><b>{r.totalPoints}</b></td>
                 </tr>
               ))}

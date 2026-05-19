@@ -26,7 +26,17 @@ function resolveApiUrl() {
   return 'http://localhost:7432';
 }
 
-export type User = { id: string; email: string; username: string; role: 'USER'|'SUPERADMIN' };
+export type User = {
+  id: string;
+  email: string;
+  username: string;
+  fullName: string | null;
+  nationalId: string | null;
+  instagramUsername: string | null;
+  birthDate: string | null;
+  followsInstagram: boolean;
+  role: 'USER' | 'SUPERADMIN';
+};
 
 export function getToken() {
   if (typeof window === 'undefined') return null;
@@ -39,16 +49,45 @@ export function setToken(t: string|null) {
   else localStorage.setItem('token', t);
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableStatus(status: number) {
+  return status === 502 || status === 503 || status === 504;
+}
+
 export async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const token = getToken();
   const API_URL = resolveApiUrl();
   const headers: any = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${API_URL}${path}`, { ...opts, headers, cache: 'no-store' });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = data?.error || `Error ${res.status}`;
-    throw new Error(msg);
+
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(`${API_URL}${path}`, { ...opts, headers, cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        if (isRetryableStatus(res.status) && attempt < maxAttempts) {
+          await sleep(400 * attempt);
+          continue;
+        }
+        const msg = data?.error || `Error ${res.status}`;
+        throw new Error(msg);
+      }
+
+      return data as T;
+    } catch (error) {
+      const isNetworkError = error instanceof TypeError;
+      if (isNetworkError && attempt < maxAttempts) {
+        await sleep(400 * attempt);
+        continue;
+      }
+      throw error;
+    }
   }
-  return data as T;
+
+  throw new Error('No se pudo conectar con el servidor');
 }

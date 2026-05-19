@@ -10,7 +10,8 @@
     "prisma:migrate": "prisma migrate dev --name init",
     "prisma:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
-    "db:users": "tsx prisma/listUsers.ts"
+    "db:users": "tsx prisma/listUsers.ts",
+    "db:teams": "tsx prisma/listTeams.ts"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

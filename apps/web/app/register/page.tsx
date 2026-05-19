@@ -1,43 +1,250 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import Nav from '../../components/Nav';
 import { register } from '../../lib/auth';
 import { useRouter } from 'next/navigation';
 
+const INSTAGRAM_URL = 'https://www.instagram.com/barrabravasportbar/';
+const instagramHandleRegex = /^@?[A-Za-z0-9._]+$/;
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('No se pudo leer la imagen'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [nationalId, setNationalId] = useState('');
+  const [instagramUsername, setInstagramUsername] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [purchaseProofImage, setPurchaseProofImage] = useState('');
+  const [followsInstagram, setFollowsInstagram] = useState(false);
   const [password, setPassword] = useState('');
-  const [msg, setMsg] = useState<string|null>(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
   const router = useRouter();
 
   return (
     <>
       <Nav />
-      <div className="card">
-        <h2 style={{marginTop:0}}>Crear cuenta</h2>
-        {msg && <div className="card">{msg}</div>}
+      <div className="card register-shell">
+        <h2 style={{ marginTop: 0, marginBottom: 8 }}>Crear cuenta para quinielas</h2>
+        <p className="small register-subcopy">
+          Solo los usuarios registrados pueden participar en quinielas. El calendario Mundial 2026 es publico.
+          El correo electronico y numero de cedula deben ser unicos.
+        </p>
 
-        <div className="label">Email</div>
-        <input className="input" value={email} onChange={e=>setEmail(e.target.value)} placeholder="tu@email.com" />
+        {msg && <div className="card register-msg">{msg}</div>}
 
-        <div className="label">Usuario</div>
-        <input className="input" value={username} onChange={e=>setUsername(e.target.value)} placeholder="usuario_123" />
+        <div className="register-layout">
+          <div className="card register-panel">
+            <h3 style={{ marginTop: 0, marginBottom: 6 }}>Pasos para habilitar tu participacion</h3>
+            <p className="small" style={{ marginTop: 0, marginBottom: 0 }}>
+              Completa estos pasos antes de crear tu cuenta.
+            </p>
 
-        <div className="label">Contraseña</div>
-        <input className="input" value={password} onChange={e=>setPassword(e.target.value)} type="password" placeholder="mínimo 6" />
+            <div className="register-step-list">
+              <div className="register-step">
+                <div className="register-step-index">Paso 1</div>
+                <div className="register-step-title">Segui a Barra Brava en Instagram</div>
+                <div className="register-step-content">
+                  <a
+                    className="btn primary"
+                    href={INSTAGRAM_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Abrir Instagram y seguir
+                  </a>
+                </div>
+              </div>
 
-        <div style={{marginTop:12}} className="row-actions">
-          <button className="btn primary" onClick={async ()=>{
-            setMsg(null);
-            try{
-              await register(email, username, password);
-              router.push('/login');
-            }catch(e:any){
-              setMsg(e.message);
-            }
-          }}>Crear</button>
+              <div className="register-step">
+                <div className="register-step-index">Paso 2</div>
+                <div className="register-step-title">Escribi tu usuario de Instagram</div>
+                <div className="register-step-content">
+                  <input
+                    className="input"
+                    value={instagramUsername}
+                    onChange={(e) => setInstagramUsername(e.target.value)}
+                    placeholder="@usuario"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                  />
+                </div>
+              </div>
+
+              <div className="register-step">
+                <div className="register-step-index">Paso 3</div>
+                <div className="register-step-title">Confirma</div>
+                <div className="register-step-content">
+                  <label className="small register-confirm-row">
+                    <input
+                      type="checkbox"
+                      checked={followsInstagram}
+                      onChange={(e) => setFollowsInstagram(e.target.checked)}
+                      style={{ marginTop: 2 }}
+                    />
+                    Confirmo que ya sigo a @barrabravasportbar. Entiendo que si no sigo la cuenta, mi participacion puede ser anulada.
+                  </label>
+                </div>
+              </div>
+
+              <div className="register-step">
+                <div className="register-step-index">Paso 4</div>
+                <div className="register-step-title">Subi la factura de tu compra en Barra Brava</div>
+                <div className="register-step-content">
+                  <p className="small" style={{ marginTop: 0, marginBottom: 8 }}>
+                    Carga una foto clara de una factura real de compra hecha en Barra Brava.
+                    Queremos asegurarnos de que solo participen personas que han consumido en Barra Brava.
+                  </p>
+                  <input
+                    className="input register-file-input"
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+
+                      try {
+                        if (file.size > 4 * 1024 * 1024) {
+                          throw new Error('La imagen no puede pesar mas de 4 MB');
+                        }
+                        const dataUrl = await fileToDataUrl(file);
+                        setPurchaseProofImage(dataUrl);
+                        setMsg(null);
+                      } catch (error: any) {
+                        setMsg(error?.message ?? 'No se pudo procesar la foto de factura');
+                      }
+                    }}
+                  />
+
+                  {purchaseProofImage && (
+                    <div className="register-proof-preview">
+                      <div className="small" style={{ marginBottom: 8 }}>Vista previa de factura</div>
+                      <img
+                        src={purchaseProofImage}
+                        alt="Factura adjunta"
+                        className="team-logo-preview"
+                        style={{ width: 180, height: 180 }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card register-panel">
+            <h3 style={{ marginTop: 0, marginBottom: 6 }}>Datos de tu cuenta</h3>
+            <p className="small" style={{ marginTop: 0 }}>
+              Este formulario crea tu acceso para entrar a quinielas privadas.
+            </p>
+
+            <div className="register-account-grid">
+              <div>
+                <div className="label">Correo electronico</div>
+                <input
+                  className="input"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="tu@email.com"
+                  autoComplete="email"
+                />
+              </div>
+
+              <div>
+                <div className="label">Numero de cedula</div>
+                <input
+                  className="input"
+                  value={nationalId}
+                  onChange={(e) => setNationalId(e.target.value)}
+                  placeholder="Ej: 1-1234-5678"
+                />
+              </div>
+
+              <div>
+                <div className="label">Nombre completo</div>
+                <input
+                  className="input"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Ej: Maria Fernanda Rojas"
+                  autoComplete="name"
+                />
+              </div>
+
+              <div>
+                <div className="label">Fecha de nacimiento</div>
+                <input
+                  className="input"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  type="date"
+                />
+              </div>
+            </div>
+
+            <div className="register-account-full">
+              <div className="label">Contrasena</div>
+              <input
+                className="input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                type="password"
+                placeholder="Minimo 6 caracteres"
+                autoComplete="new-password"
+              />
+            </div>
+
+            <div className="row-actions register-actions">
+              <button
+                className="btn primary"
+                disabled={saving}
+                onClick={async () => {
+                  if (saving) return;
+                  setMsg(null);
+                  setSaving(true);
+                  try {
+                    const cleanInstagramUsername = instagramUsername.trim();
+
+                    if (!cleanInstagramUsername) throw new Error('Debes escribir tu usuario de Instagram');
+                    if (!instagramHandleRegex.test(cleanInstagramUsername)) {
+                      throw new Error('El usuario de Instagram no es valido');
+                    }
+                    if (!purchaseProofImage) throw new Error('Debes adjuntar la foto de la factura');
+                    if (!followsInstagram) throw new Error('Debes confirmar que sigues el Instagram de Barra Brava');
+
+                    await register({
+                      email,
+                      fullName,
+                      nationalId,
+                      instagramUsername: cleanInstagramUsername,
+                      birthDate,
+                      purchaseProofImage,
+                      followsInstagram,
+                      password,
+                    });
+                    router.push('/login');
+                  } catch (e: any) {
+                    setMsg(e.message);
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                {saving ? 'Creando...' : 'Crear cuenta'}
+              </button>
+              <Link className="btn" href="/login">Ya tengo cuenta</Link>
+            </div>
+          </div>
         </div>
       </div>
     </>

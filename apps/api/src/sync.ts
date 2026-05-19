@@ -27,7 +27,7 @@ function isFinished(short?: string) {
   return Boolean(short && FINISHED_STATUS.has(short));
 }
 
-async function findOrCreateTeamFromApi(team: {
+async function findOrCreateTeamFromApi(leagueId: string, team: {
   name?: string;
   code?: string | null;
   logo?: string | null;
@@ -39,7 +39,7 @@ async function findOrCreateTeamFromApi(team: {
   const logoUrl = team.logo?.trim() || null;
 
   if (code) {
-    const byCode = await prisma.team.findUnique({ where: { code } });
+    const byCode = await prisma.team.findFirst({ where: { leagueId, code } });
     if (byCode) {
       if (byCode.name !== name || byCode.logoUrl !== logoUrl) {
         return prisma.team.update({
@@ -51,7 +51,7 @@ async function findOrCreateTeamFromApi(team: {
     }
   }
 
-  const byName = await prisma.team.findFirst({ where: { name } });
+  const byName = await prisma.team.findFirst({ where: { leagueId, name } });
   if (byName) {
     if ((!byName.code && code) || byName.logoUrl !== logoUrl) {
       return prisma.team.update({
@@ -63,7 +63,7 @@ async function findOrCreateTeamFromApi(team: {
   }
 
   return prisma.team.create({
-    data: { name, code, logoUrl },
+    data: { leagueId, name, code, logoUrl },
   });
 }
 
@@ -158,8 +158,8 @@ export async function syncLeagueFixturesFromApiFootball(options: SyncFixturesOpt
     }
 
     const [homeTeam, awayTeam] = await Promise.all([
-      findOrCreateTeamFromApi(homeApi),
-      findOrCreateTeamFromApi(awayApi),
+      findOrCreateTeamFromApi(options.leagueId, homeApi),
+      findOrCreateTeamFromApi(options.leagueId, awayApi),
     ]);
 
     const existing = await prisma.match.findFirst({

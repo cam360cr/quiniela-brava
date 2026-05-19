@@ -4,7 +4,6 @@ import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import { authRoutes } from './auth.js';
 import { leagueRoutes } from './leagues.js';
-import { finalPickRoutes } from './finalPicks.js';
 import { syncLeagueFixturesFromApiFootball } from './sync.js';
 
 const app = Fastify({ logger: true });
@@ -46,7 +45,6 @@ app.get('/health', async () => ({ ok: true }));
 
 await authRoutes(app);
 await leagueRoutes(app);
-await finalPickRoutes(app);
 
 const autoSyncEnabled = process.env.FIXTURES_AUTO_SYNC === 'true';
 const autoSyncLeagueIds = (process.env.FIXTURES_AUTO_SYNC_LEAGUE_IDS || '')

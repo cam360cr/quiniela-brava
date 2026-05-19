@@ -2,8 +2,8 @@ import './globals.css';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Quiniela',
-  description: 'Quiniela multi-ligas (demo)',
+  title: 'Quiniela Brava 2026',
+  description: 'Calendario Mundial 2026 y quinielas oficiales de Barra Brava',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
