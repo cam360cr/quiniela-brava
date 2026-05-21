@@ -24,12 +24,12 @@ export default function LeaguesPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [name, setName] = useState('Mi Quiniela');
   const [description, setDescription] = useState('');
-  const [joinCode, setJoinCode] = useState('');
   const { me, loading } = useMe();
   const router = useRouter();
   const isSuperadmin = me?.role === 'SUPERADMIN';
   const joinedLeagues = activeLeagues.filter((league) => league.isMember);
   const joinableLeagues = activeLeagues.filter((league) => !league.isMember);
+  const membersCountByLeagueId = new Map(activeLeagues.map((league) => [league.id, league._count.members]));
 
   async function load() {
     const active = await apiFetch<{ leagues: ActiveLeague[] }>('/leagues/active');
@@ -90,64 +90,50 @@ export default function LeaguesPage() {
         </p>
         {msg && <div className="card">{msg}</div>}
 
-        <div className="grid cols2">
-          {isSuperadmin && (
-            <div className="card" style={{ marginTop: 0 }}>
-              <h3 style={{marginTop:0}}>Crear quiniela</h3>
-              <div className="label">Nombre</div>
-              <input className="input" value={name} onChange={e => setName(e.target.value)} />
-
-              <div className="label">Descripción</div>
-              <input className="input" value={description} onChange={e => setDescription(e.target.value)} placeholder="Descripción opcional" />
-
-              <div style={{ marginTop: 12 }} className="row-actions">
-                <button className="btn primary" onClick={async () => {
-                  setMsg(null);
-                  try {
-                    const r = await apiFetch<{ league: any }>('/leagues', { method: 'POST', body: JSON.stringify({ name, description: description || undefined }) });
-                    await load();
-                    router.push(`/leagues/${r.league.id}`);
-                  } catch (e: any) {
-                    setMsg(e.message);
-                  }
-                }}>Crear</button>
-              </div>
-            </div>
-          )}
-
+        {isSuperadmin && (
           <div className="card" style={{ marginTop: 0 }}>
-            <h3 style={{marginTop:0}}>Unirme por codigo</h3>
-            <div className="label">Codigo</div>
-            <input className="input" value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} placeholder="DEMO12" />
+            <h3 style={{marginTop:0}}>Crear quiniela</h3>
+            <div className="label">Nombre</div>
+            <input className="input" value={name} onChange={e => setName(e.target.value)} />
+
+            <div className="label">Descripción</div>
+            <input className="input" value={description} onChange={e => setDescription(e.target.value)} placeholder="Descripción opcional" />
+
             <div style={{ marginTop: 12 }} className="row-actions">
-              <button className="btn green" onClick={async () => {
+              <button className="btn primary" onClick={async () => {
                 setMsg(null);
                 try {
-                  const r = await apiFetch<{ leagueId: string }>('/leagues/join', { method: 'POST', body: JSON.stringify({ joinCode }) });
+                  const r = await apiFetch<{ league: any }>('/leagues', { method: 'POST', body: JSON.stringify({ name, description: description || undefined }) });
                   await load();
-                  router.push(`/leagues/${r.leagueId}`);
+                  router.push(`/leagues/${r.league.id}`);
                 } catch (e: any) {
                   setMsg(e.message);
                 }
-              }}>Unirme</button>
+              }}>Crear</button>
             </div>
-            <p className="small">Tip: quiniela demo = <b>DEMO12</b></p>
           </div>
-        </div>
+        )}
 
         <div className="card">
           <h3 style={{ marginTop: 0 }}>Quinielas donde ya participo</h3>
           {joinedLeagues.length === 0 ? (
             <p className="small">Todavia no te has unido a ninguna quiniela.</p>
           ) : (
-            <table className="table">
-              <thead><tr><th>Quiniela</th><th>Descripcion</th><th>Creador</th><th>Participantes</th><th></th></tr></thead>
+            <table className="table qb-leagues-table">
+              <colgroup>
+                <col className="qb-col-league" />
+                <col className="qb-col-description" />
+                <col className="qb-col-code" />
+                <col className="qb-col-members" />
+                <col className="qb-col-action" />
+              </colgroup>
+              <thead><tr><th>Quiniela</th><th>Descripcion</th><th>Codigo</th><th>Participantes</th><th></th></tr></thead>
               <tbody>
                 {joinedLeagues.map((l) => (
                   <tr key={l.id}>
                     <td>{l.name}</td>
                     <td>{l.description || '-'}</td>
-                    <td>{l.createdBy.fullName?.trim() || `@${l.createdBy.username}`}</td>
+                    <td className="qb-code-cell">{l.joinCode}</td>
                     <td>{l._count.members}</td>
                     <td>
                       <Link className="btn" href={`/leagues/${l.id}`}>Abrir</Link>
@@ -164,17 +150,24 @@ export default function LeaguesPage() {
           {joinableLeagues.length === 0 ? (
             <p className="small">No hay quinielas nuevas disponibles en este momento.</p>
           ) : (
-            <table className="table">
-              <thead><tr><th>Quiniela</th><th>Descripcion</th><th>Creador</th><th>Participantes</th><th></th></tr></thead>
+            <table className="table qb-leagues-table">
+              <colgroup>
+                <col className="qb-col-league" />
+                <col className="qb-col-description" />
+                <col className="qb-col-code" />
+                <col className="qb-col-members" />
+                <col className="qb-col-action" />
+              </colgroup>
+              <thead><tr><th>Quiniela</th><th>Descripcion</th><th>Codigo</th><th>Participantes</th><th></th></tr></thead>
               <tbody>
                 {joinableLeagues.map((l) => (
                   <tr key={l.id}>
                     <td>{l.name}</td>
                     <td>{l.description || '-'}</td>
-                    <td>{l.createdBy.fullName?.trim() || `@${l.createdBy.username}`}</td>
+                    <td className="qb-code-cell">{l.joinCode}</td>
                     <td>{l._count.members}</td>
                     <td>
-                      <button className="btn green" onClick={async () => {
+                      <button className="btn" onClick={async () => {
                         setMsg(null);
                         try {
                           await apiFetch<{ leagueId: string }>('/leagues/join', { method: 'POST', body: JSON.stringify({ joinCode: l.joinCode }) });
@@ -197,14 +190,22 @@ export default function LeaguesPage() {
             {leagues.length === 0 ? (
               <p className="small">No has creado quinielas aun.</p>
             ) : (
-              <table className="table">
-                <thead><tr><th>Quiniela</th><th>Descripcion</th><th>Codigo</th><th></th></tr></thead>
+              <table className="table qb-leagues-table">
+                <colgroup>
+                  <col className="qb-col-league" />
+                  <col className="qb-col-description" />
+                  <col className="qb-col-code" />
+                  <col className="qb-col-members" />
+                  <col className="qb-col-action" />
+                </colgroup>
+                <thead><tr><th>Quiniela</th><th>Descripcion</th><th>Codigo</th><th>Participantes</th><th></th></tr></thead>
                 <tbody>
                   {leagues.map((l) => (
                     <tr key={l.id}>
                       <td>{l.name}</td>
                       <td>{l.description || '-'}</td>
-                      <td><b>{l.joinCode}</b></td>
+                      <td className="qb-code-cell">{l.joinCode}</td>
+                      <td>{membersCountByLeagueId.get(l.id) ?? 0}</td>
                       <td><Link className="btn" href={`/leagues/${l.id}`}>Abrir</Link></td>
                     </tr>
                   ))}

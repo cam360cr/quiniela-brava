@@ -22,7 +22,6 @@ export default function Nav() {
         <Link className="btn" href="/premios">Premios</Link>
         {showMenu && <Link className="btn" href="/">Inicio</Link>}
         {showMenu && <Link className="btn" href="/leagues">Mis quinielas</Link>}
-        {showMenu && <Link className="btn" href="/leaderboard">Ranking</Link>}
         {!loading && me?.role === 'SUPERADMIN' && <Link className="btn green" href="/admin">Admin</Link>}
         {!loading && me ? (
           <>

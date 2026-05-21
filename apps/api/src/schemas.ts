@@ -4,6 +4,7 @@ const imageDataUrlSchema = z.string().regex(/^data:image\/[a-zA-Z0-9.+-]+;base64
 
 export const registerSchema = z.object({
   email: z.string().email(),
+  username: z.string().min(3).max(30).regex(/^@?[A-Za-z0-9._]+$/),
   fullName: z.string().min(5).max(120),
   nationalId: z.string().min(5).max(32).regex(/^[0-9A-Za-z\-\s]+$/),
   instagramUsername: z.string().min(2).max(40).regex(/^@?[A-Za-z0-9._]+$/),
@@ -16,7 +17,7 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  identifier: z.string().min(3), // email o username
+  identifier: z.string().min(3), // email, username o cedula
   password: z.string().min(6).max(72),
 });
 

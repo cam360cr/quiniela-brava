@@ -4,15 +4,6 @@ import { Prisma } from '@prisma/client';
 import { prisma } from './prisma.js';
 import { loginSchema, registerSchema } from './schemas.js';
 
-function normalizeUsernamePart(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '')
-    .slice(0, 18);
-}
-
 function normalizeNationalId(value: string) {
   const compact = value.trim().replace(/\s+/g, '');
   const digitsOnly = compact.replace(/\D/g, '');
@@ -23,27 +14,8 @@ function normalizeInstagramUsername(value: string) {
   return value.trim().replace(/^@+/, '').toLowerCase();
 }
 
-async function buildUniqueUsername(fullName: string, email: string, nationalId: string) {
-  const fromName = normalizeUsernamePart(fullName);
-  const fromEmail = normalizeUsernamePart(email.split('@')[0] ?? '');
-  const base = fromName || fromEmail || 'usuario';
-  const nationalSuffix = nationalId.replace(/\D/g, '').slice(-4);
-  const preferred = `${base}${nationalSuffix}`.slice(0, 24) || 'usuario';
-
-  let candidate = preferred;
-
-  for (let counter = 1; counter <= 999; counter++) {
-    const exists = await prisma.user.findUnique({
-      where: { username: candidate },
-      select: { id: true },
-    });
-    if (!exists) return candidate;
-
-    const suffix = String(counter);
-    candidate = `${preferred.slice(0, Math.max(3, 24 - suffix.length))}${suffix}`;
-  }
-
-  return `usuario${Date.now().toString().slice(-8)}`;
+function normalizeUsername(value: string) {
+  return value.trim().replace(/^@+/, '').toLowerCase();
 }
 
 export async function authRoutes(app: FastifyInstance) {
@@ -53,6 +25,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     const {
       email,
+      username,
       fullName,
       nationalId,
       instagramUsername,
@@ -63,10 +36,19 @@ export async function authRoutes(app: FastifyInstance) {
     } = parsed.data;
 
     const cleanEmail = email.trim().toLowerCase();
+    const cleanUsername = normalizeUsername(username);
     const cleanFullName = fullName.trim();
     const cleanNationalId = normalizeNationalId(nationalId);
     const cleanInstagramUsername = normalizeInstagramUsername(instagramUsername);
     const birthDateValue = new Date(`${birthDate}T00:00:00.000Z`);
+
+    if (cleanUsername.length < 3 || cleanUsername.length > 24) {
+      return reply.code(400).send({ error: 'El nombre de usuario debe tener entre 3 y 24 caracteres' });
+    }
+
+    if (!/^[a-z0-9._]+$/.test(cleanUsername)) {
+      return reply.code(400).send({ error: 'El nombre de usuario solo puede usar letras, numeros, punto y guion bajo' });
+    }
 
     if (cleanNationalId.length < 5) {
       return reply.code(400).send({ error: 'Numero de cedula invalido' });
@@ -95,19 +77,28 @@ export async function authRoutes(app: FastifyInstance) {
     });
     if (existsEmail) return reply.code(409).send({ error: 'Ya existe una cuenta con este correo electronico' });
 
+    const existsUsername = await prisma.user.findFirst({
+      where: {
+        username: {
+          equals: cleanUsername,
+          mode: 'insensitive',
+        },
+      },
+      select: { id: true },
+    });
+    if (existsUsername) return reply.code(409).send({ error: 'Ya existe una cuenta con este nombre de usuario' });
+
     const existsNationalId = await prisma.user.findUnique({
       where: { nationalId: cleanNationalId },
       select: { id: true },
     });
     if (existsNationalId) return reply.code(409).send({ error: 'Ya existe una cuenta con este numero de cedula' });
 
-    const username = await buildUniqueUsername(cleanFullName, cleanEmail, cleanNationalId);
-
     try {
       const user = await prisma.user.create({
         data: {
           email: cleanEmail,
-          username,
+          username: cleanUsername,
           fullName: cleanFullName,
           nationalId: cleanNationalId,
           instagramUsername: cleanInstagramUsername,
@@ -138,6 +129,9 @@ export async function authRoutes(app: FastifyInstance) {
         if (target.includes('email')) {
           return reply.code(409).send({ error: 'Ya existe una cuenta con este correo electronico' });
         }
+        if (target.includes('username')) {
+          return reply.code(409).send({ error: 'Ya existe una cuenta con este nombre de usuario' });
+        }
         if (target.includes('nationalId')) {
           return reply.code(409).send({ error: 'Ya existe una cuenta con este numero de cedula' });
         }
@@ -152,10 +146,27 @@ export async function authRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload' });
 
     const { identifier, password } = parsed.data;
+    const cleanIdentifier = identifier.trim();
+    const cleanUsername = normalizeUsername(cleanIdentifier);
+    const cleanNationalId = normalizeNationalId(cleanIdentifier);
 
     const user = await prisma.user.findFirst({
       where: {
-        OR: [{ email: identifier }, { username: identifier }],
+        OR: [
+          {
+            email: {
+              equals: cleanIdentifier,
+              mode: 'insensitive',
+            },
+          },
+          {
+            username: {
+              equals: cleanUsername,
+              mode: 'insensitive',
+            },
+          },
+          { nationalId: cleanNationalId },
+        ],
       },
     });
 

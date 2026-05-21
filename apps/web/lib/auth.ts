@@ -4,6 +4,7 @@ import { apiFetch, setToken } from './api';
 
 type RegisterPayload = {
   email: string;
+  username: string;
   fullName: string;
   nationalId: string;
   instagramUsername: string;

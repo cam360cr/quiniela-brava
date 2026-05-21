@@ -133,6 +133,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
   const [homeTeamId, setHomeTeamId] = useState('');
   const [awayTeamId, setAwayTeamId] = useState('');
   const [kickoffAt, setKickoffAt] = useState('');
+  const [matchesTab, setMatchesTab] = useState<'open' | 'closed'>('open');
 
   async function load() {
     const r = await apiFetch<{ league: any; matches: MatchItem[]; canManage: boolean }>(`/leagues/${leagueId}/matches`);
@@ -186,6 +187,11 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
     if (!query) return flagCatalog;
     return flagCatalog.filter((item) => item.country.toLowerCase().includes(query));
   }, [flagSearch]);
+
+  const now = Date.now();
+  const openMatches = matches.filter((m) => new Date(m.lockAt).getTime() > now);
+  const closedMatches = matches.filter((m) => new Date(m.lockAt).getTime() <= now);
+  const visibleMatches = matchesTab === 'open' ? openMatches : closedMatches;
 
   useEffect(() => {
     if (!me) return;
@@ -453,15 +459,32 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
         )}
 
         <section className="card">
-          <h3 style={{ marginTop: 0 }}>Mis partidos</h3>
+          <div className="row-actions" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 0 }}>Mis partidos</h3>
+            <div className="row-actions">
+              <button className={`btn ${matchesTab === 'open' ? 'primary' : ''}`} onClick={() => setMatchesTab('open')}>
+                Abiertos ({openMatches.length})
+              </button>
+              <button className={`btn ${matchesTab === 'closed' ? 'primary' : ''}`} onClick={() => setMatchesTab('closed')}>
+                Cerrados ({closedMatches.length})
+              </button>
+            </div>
+          </div>
           <p className="small">Completa tus pronosticos antes del cierre de cada partido.</p>
 
           {matches.length === 0 ? (
             <p className="small">Esta quiniela todavia no tiene partidos.</p>
+          ) : visibleMatches.length === 0 ? (
+            <p className="small">
+              {matchesTab === 'open'
+                ? 'No hay partidos abiertos para pronosticar en este momento.'
+                : 'Todavia no hay partidos cerrados.'}
+            </p>
           ) : (
             <div className="qb-match-list">
-              {matches.map((m) => {
+              {visibleMatches.map((m) => {
                 const locked = new Date(m.lockAt) <= new Date();
+                const sameCloseTime = new Date(m.lockAt).getTime() === new Date(m.kickoffAt).getTime();
 
                 const currentPredHome = (predHome[m.id] ?? '').trim();
                 const currentPredAway = (predAway[m.id] ?? '').trim();
@@ -510,9 +533,8 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                     </div>
 
                     <div className="qb-meta">
-                      <div><span className="small">Fecha</span><b>{dateLabel(m.kickoffAt)}</b></div>
-                      <div><span className="small">Kickoff</span><b>{timeLabel(m.kickoffAt)}</b></div>
-                      <div><span className="small">Cierre</span><b>{dateLabel(m.lockAt)} {timeLabel(m.lockAt)}</b></div>
+                      <div><span className="small">Fecha y hora</span><b>{dateLabel(m.kickoffAt)} {timeLabel(m.kickoffAt)}</b></div>
+                      <div><span className="small">Cierre del pronostico</span><b>{sameCloseTime ? 'Misma fecha y hora del partido' : `${dateLabel(m.lockAt)} ${timeLabel(m.lockAt)}`}</b></div>
                     </div>
 
                     <div className="qb-block">

@@ -8,9 +8,10 @@ import { useMe } from '../../../../lib/hooks';
 
 export default function LeaderboardPage({ params }: { params: { id: string } }) {
   const leagueId = params.id;
-  const [rows, setRows] = useState<{ username: string; fullName?: string | null; displayName?: string; totalPoints: number }[]>([]);
+  const [rows, setRows] = useState<{ userId: string; username: string; totalPoints: number }[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const { me, loading } = useMe();
+  const isSuperadmin = me?.role === 'SUPERADMIN';
 
   useEffect(() => {
     if (!me) return;
@@ -58,13 +59,25 @@ export default function LeaderboardPage({ params }: { params: { id: string } }) 
         {msg && <div className="card">{msg}</div>}
         <div className="card">
           <table className="table">
-            <thead><tr><th>#</th><th>Usuario</th><th>Puntos</th></tr></thead>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Usuario</th>
+                <th>Puntos</th>
+                {isSuperadmin && <th></th>}
+              </tr>
+            </thead>
             <tbody>
               {rows.map((r, idx) => (
-                <tr key={r.username}>
+                <tr key={r.userId}>
                   <td>{idx+1}</td>
-                  <td>{r.displayName || r.fullName?.trim() || `@${r.username}`}</td>
+                  <td>{r.username}</td>
                   <td><b>{r.totalPoints}</b></td>
+                  {isSuperadmin && (
+                    <td>
+                      <Link className="btn" href={`/admin/users/${r.userId}`}>Ver usuario</Link>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

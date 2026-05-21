@@ -165,6 +165,67 @@ export async function leagueRoutes(app: FastifyInstance) {
     });
   });
 
+  // SUPERADMIN: ver detalle de un usuario
+  app.get('/admin/users/:id', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
+    const id = (req.params as any).id as string;
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        fullName: true,
+        nationalId: true,
+        instagramUsername: true,
+        birthDate: true,
+        followsInstagram: true,
+        purchaseProofImage: true,
+        role: true,
+        createdAt: true,
+        _count: {
+          select: {
+            leagues: true,
+            createdLeagues: true,
+            predictions: true,
+          },
+        },
+        leagues: {
+          orderBy: { joinedAt: 'desc' },
+          select: {
+            role: true,
+            joinedAt: true,
+            league: {
+              select: {
+                id: true,
+                name: true,
+                joinCode: true,
+              },
+            },
+          },
+        },
+        createdLeagues: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            name: true,
+            joinCode: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    if (!user) return reply.code(404).send({ error: 'User not found' });
+
+    return reply.send({
+      user: {
+        ...user,
+        hasPurchaseProof: Boolean(user.purchaseProofImage),
+      },
+    });
+  });
+
   app.get('/admin/teams', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
     const leagueId = String((req.query as any)?.leagueId || '').trim();
     const q = String((req.query as any)?.q || '').trim();
@@ -259,6 +320,25 @@ export async function leagueRoutes(app: FastifyInstance) {
     });
 
     return reply.send({ team });
+  });
+
+  app.delete('/admin/teams/:id', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
+    const id = (req.params as any).id as string;
+    const existing = await prisma.team.findUnique({ where: { id } });
+    if (!existing) return reply.code(404).send({ error: 'Team not found' });
+
+    const matchesUsingTeam = await prisma.match.count({
+      where: {
+        OR: [{ homeTeamId: id }, { awayTeamId: id }],
+      },
+    });
+
+    if (matchesUsingTeam > 0) {
+      return reply.code(409).send({ error: 'No puedes eliminar este equipo porque ya esta usado en partidos' });
+    }
+
+    await prisma.team.delete({ where: { id } });
+    return reply.send({ ok: true });
   });
 
   // Equipos por quiniela (miembros pueden ver, OWNER puede crear)
@@ -467,6 +547,95 @@ export async function leagueRoutes(app: FastifyInstance) {
     });
 
     return reply.send({ match });
+  });
+
+  // OWNER o SUPERADMIN: editar partido
+  app.patch('/leagues/:leagueId/matches/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const parsed = createMatchSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
+
+    const uid = (req.user as any).uid as string;
+    const leagueId = (req.params as any).leagueId as string;
+    const matchId = (req.params as any).id as string;
+
+    const membership = await prisma.leagueMember.findUnique({
+      where: { leagueId_userId: { leagueId, userId: uid } },
+    });
+
+    const canManage = membership?.role === 'OWNER' || isSuperadmin(req);
+    if (!canManage) return reply.code(403).send({ error: 'Forbidden' });
+
+    const existingMatch = await prisma.match.findUnique({ where: { id: matchId } });
+    if (!existingMatch || existingMatch.leagueId !== leagueId) {
+      return reply.code(404).send({ error: 'Match not found in this league' });
+    }
+
+    const { homeTeam, awayTeam, kickoffAt, lockAt } = parsed.data;
+    if (homeTeam.trim().toLowerCase() === awayTeam.trim().toLowerCase()) {
+      return reply.code(400).send({ error: 'Los equipos deben ser distintos' });
+    }
+
+    const kickoffDate = new Date(kickoffAt);
+    const lockDate = lockAt ? new Date(lockAt) : kickoffDate;
+    if (Number.isNaN(kickoffDate.getTime()) || Number.isNaN(lockDate.getTime())) {
+      return reply.code(400).send({ error: 'Fecha invalida' });
+    }
+    if (lockDate > kickoffDate) {
+      return reply.code(400).send({ error: 'El cierre no puede ser despues del kickoff' });
+    }
+
+    const normalizedHome = homeTeam.trim();
+    const normalizedAway = awayTeam.trim();
+
+    const [home, away] = await Promise.all([
+      prisma.team.findFirst({ where: { leagueId, name: normalizedHome } }),
+      prisma.team.findFirst({ where: { leagueId, name: normalizedAway } }),
+    ]);
+
+    if (!home || !away) {
+      return reply.code(400).send({
+        error: 'Primero registra ambos equipos en la seccion Agregar equipos de esta quiniela',
+      });
+    }
+
+    const match = await prisma.match.update({
+      where: { id: matchId },
+      data: {
+        homeTeamId: home.id,
+        awayTeamId: away.id,
+        kickoffAt: kickoffDate,
+        lockAt: lockDate,
+      },
+      include: { homeTeam: true, awayTeam: true },
+    });
+
+    return reply.send({ match });
+  });
+
+  // OWNER o SUPERADMIN: eliminar partido
+  app.delete('/leagues/:leagueId/matches/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const uid = (req.user as any).uid as string;
+    const leagueId = (req.params as any).leagueId as string;
+    const matchId = (req.params as any).id as string;
+
+    const membership = await prisma.leagueMember.findUnique({
+      where: { leagueId_userId: { leagueId, userId: uid } },
+    });
+
+    const canManage = membership?.role === 'OWNER' || isSuperadmin(req);
+    if (!canManage) return reply.code(403).send({ error: 'Forbidden' });
+
+    const existingMatch = await prisma.match.findUnique({ where: { id: matchId } });
+    if (!existingMatch || existingMatch.leagueId !== leagueId) {
+      return reply.code(404).send({ error: 'Match not found in this league' });
+    }
+
+    await prisma.$transaction([
+      prisma.prediction.deleteMany({ where: { matchId } }),
+      prisma.match.delete({ where: { id: matchId } }),
+    ]);
+
+    return reply.send({ ok: true });
   });
 
   // Guardar pronóstico (upsert)

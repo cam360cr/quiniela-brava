@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 
 const INSTAGRAM_URL = 'https://www.instagram.com/barrabravasportbar/';
 const instagramHandleRegex = /^@?[A-Za-z0-9._]+$/;
+const appUsernameRegex = /^@?[A-Za-z0-9._]+$/;
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -20,6 +21,7 @@ function fileToDataUrl(file: File): Promise<string> {
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [nationalId, setNationalId] = useState('');
   const [instagramUsername, setInstagramUsername] = useState('');
@@ -38,7 +40,7 @@ export default function RegisterPage() {
         <h2 style={{ marginTop: 0, marginBottom: 8 }}>Crear cuenta para quinielas</h2>
         <p className="small register-subcopy">
           Solo los usuarios registrados pueden participar en quinielas. El calendario Mundial 2026 es publico.
-          El correo electronico y numero de cedula deben ser unicos.
+          El correo electronico, usuario y numero de cedula deben ser unicos.
         </p>
 
         {msg && <div className="card register-msg">{msg}</div>}
@@ -161,6 +163,19 @@ export default function RegisterPage() {
               </div>
 
               <div>
+                <div className="label">Usuario unico</div>
+                <input
+                  className="input"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Ej: juan.perez"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  autoComplete="username"
+                />
+              </div>
+
+              <div>
                 <div className="label">Numero de cedula</div>
                 <input
                   className="input"
@@ -213,8 +228,16 @@ export default function RegisterPage() {
                   setMsg(null);
                   setSaving(true);
                   try {
+                    const cleanUsername = username.trim();
                     const cleanInstagramUsername = instagramUsername.trim();
 
+                    if (!cleanUsername) throw new Error('Debes escribir un nombre de usuario');
+                    if (!appUsernameRegex.test(cleanUsername)) {
+                      throw new Error('El nombre de usuario no es valido');
+                    }
+                    if (cleanUsername.replace(/^@+/, '').length < 3) {
+                      throw new Error('El nombre de usuario debe tener al menos 3 caracteres');
+                    }
                     if (!cleanInstagramUsername) throw new Error('Debes escribir tu usuario de Instagram');
                     if (!instagramHandleRegex.test(cleanInstagramUsername)) {
                       throw new Error('El usuario de Instagram no es valido');
@@ -224,6 +247,7 @@ export default function RegisterPage() {
 
                     await register({
                       email,
+                      username: cleanUsername.replace(/^@+/, '').toLowerCase(),
                       fullName,
                       nationalId,
                       instagramUsername: cleanInstagramUsername,
