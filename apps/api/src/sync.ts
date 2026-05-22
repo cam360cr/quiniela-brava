@@ -82,9 +82,7 @@ async function recalcPointsForMatch(leagueId: string, matchId: string, finalHome
           p.predHome,
           p.predAway,
           finalHome,
-          finalAway,
-          league.pointsExact,
-          league.pointsOutcome
+          finalAway
         ),
       },
     })

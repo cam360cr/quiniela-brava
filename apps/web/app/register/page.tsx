@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Nav from '../../components/Nav';
+import ReglamentoContent from '../../components/ReglamentoContent';
 import { register } from '../../lib/auth';
 import { useRouter } from 'next/navigation';
 
@@ -28,6 +29,7 @@ export default function RegisterPage() {
   const [birthDate, setBirthDate] = useState('');
   const [purchaseProofImage, setPurchaseProofImage] = useState('');
   const [followsInstagram, setFollowsInstagram] = useState(false);
+  const [acceptedRules, setAcceptedRules] = useState(false);
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -141,6 +143,31 @@ export default function RegisterPage() {
                   )}
                 </div>
               </div>
+
+              <div className="register-step">
+                <div className="register-step-index">Paso 5</div>
+                <div className="register-step-title">Lee y acepta el reglamento oficial</div>
+                <div className="register-step-content">
+                  <p className="small" style={{ marginTop: 0, marginBottom: 8 }}>
+                    Debes leer el reglamento completo antes de crear tu cuenta.
+                  </p>
+                  <div className="register-rules-box">
+                    <ReglamentoContent compact />
+                  </div>
+                  <label className="small register-confirm-row register-rules-check">
+                    <input
+                      type="checkbox"
+                      checked={acceptedRules}
+                      onChange={(e) => setAcceptedRules(e.target.checked)}
+                      style={{ marginTop: 2 }}
+                    />
+                    Confirmo que lei y acepto el reglamento de la quiniela.
+                  </label>
+                  <div className="small" style={{ marginTop: 8 }}>
+                    Tambien puedes verlo en una pagina dedicada: <Link href="/reglamento">Ver reglamento completo</Link>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -244,6 +271,7 @@ export default function RegisterPage() {
                     }
                     if (!purchaseProofImage) throw new Error('Debes adjuntar la foto de la factura');
                     if (!followsInstagram) throw new Error('Debes confirmar que sigues el Instagram de Barra Brava');
+                    if (!acceptedRules) throw new Error('Debes leer y aceptar el reglamento para crear tu cuenta');
 
                     await register({
                       email,
@@ -254,6 +282,7 @@ export default function RegisterPage() {
                       birthDate,
                       purchaseProofImage,
                       followsInstagram,
+                      acceptedRules,
                       password,
                     });
                     router.push('/login');

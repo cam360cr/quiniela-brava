@@ -28,7 +28,7 @@ export default function Page() {
           <p className="small">
             Enfocada en dos cosas: calendario del Mundial 2026 (publico) y quinielas (solo usuarios registrados).
           </p>
-          <div className="grid cols3 module-grid">
+          <div className="grid cols2 module-grid">
             <div className="module-card">
               <h3>Mundial 2026</h3>
               <p className="small">Consulta grupos y calendario oficial sin necesidad de iniciar sesion.</p>
@@ -50,14 +50,26 @@ export default function Page() {
                 <Link className="btn" href="/premios">Ver premios</Link>
               </div>
             </div>
+            <div className="module-card">
+              <h3>Reglamento oficial</h3>
+              <p className="small">Lee requisitos, puntajes, desempates y condiciones para participar.</p>
+              <div className="row-actions" style={{ marginTop: 12 }}>
+                <Link className="btn" href="/reglamento">Leer reglamento</Link>
+              </div>
+            </div>
           </div>
-          <div className="grid cols2">
-            <Link className="btn primary" href="/login" style={{ textAlign: 'center', padding: '14px 18px' }}>
-              Entrar
-            </Link>
-            <Link className="btn" href="/register" style={{ textAlign: 'center', padding: '14px 18px' }}>
-              Crear cuenta
-            </Link>
+          <div className="landing-auth-cta">
+            <p className="small landing-auth-copy">
+              Para participar en quinielas, inicia sesion o crea tu cuenta.
+            </p>
+            <div className="landing-auth-actions">
+              <Link className="btn primary" href="/login" style={{ textAlign: 'center', padding: '14px 18px' }}>
+                Entrar
+              </Link>
+              <Link className="btn" href="/register" style={{ textAlign: 'center', padding: '14px 18px' }}>
+                Crear cuenta
+              </Link>
+            </div>
           </div>
         </div>
       </>
@@ -73,13 +85,12 @@ export default function Page() {
           Elige tu siguiente paso: unirte a quinielas, revisar calendario o consultar premios finales.
         </p>
 
-        <div className="grid cols3 module-grid">
+        <div className="grid cols2 module-grid">
           <div className="module-card">
             <h3>Quiniela</h3>
             <p className="small">Mira quinielas disponibles, unete por codigo y revisa en cuales ya participas.</p>
             <div className="row-actions" style={{ marginTop: 12 }}>
               <Link className="btn primary" href="/leagues">Ir a quiniela</Link>
-              <Link className="btn" href="/leaderboard">Ranking</Link>
             </div>
           </div>
 
@@ -96,6 +107,14 @@ export default function Page() {
             <p className="small">Consulta que ganaran los primeros lugares al cierre del Mundial.</p>
             <div className="row-actions" style={{ marginTop: 12 }}>
               <Link className="btn" href="/premios">Ver premios</Link>
+            </div>
+          </div>
+
+          <div className="module-card">
+            <h3>Reglamento oficial</h3>
+            <p className="small">Consulta reglas de participacion, sistema de puntos y desempates.</p>
+            <div className="row-actions" style={{ marginTop: 12 }}>
+              <Link className="btn" href="/reglamento">Leer reglamento</Link>
             </div>
           </div>
         </div>

@@ -13,6 +13,9 @@ export const registerSchema = z.object({
   followsInstagram: z.boolean().refine((value) => value, {
     message: 'Debes confirmar que sigues a Barra Brava en Instagram',
   }),
+  acceptedRules: z.boolean().refine((value) => value, {
+    message: 'Debes aceptar el reglamento de la quiniela',
+  }),
   password: z.string().min(6).max(72),
 });
 
@@ -25,8 +28,6 @@ export const createLeagueSchema = z.object({
   name: z.string().min(2).max(64),
   description: z.string().max(255).optional(),
   isPublic: z.boolean().optional().default(false),
-  pointsExact: z.number().int().min(0).max(20).optional(),
-  pointsOutcome: z.number().int().min(0).max(20).optional(),
 });
 
 export const joinLeagueSchema = z.object({

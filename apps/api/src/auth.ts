@@ -32,8 +32,12 @@ export async function authRoutes(app: FastifyInstance) {
       birthDate,
       purchaseProofImage,
       followsInstagram,
+      acceptedRules,
       password,
     } = parsed.data;
+
+    // Explicitly consume this field so the register contract stays in sync with UI requirements.
+    void acceptedRules;
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanUsername = normalizeUsername(username);

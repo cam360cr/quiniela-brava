@@ -127,6 +127,12 @@ h1,h2,h3{
   justify-content:flex-end;
 }
 
+.nav-toggle{
+  display:none;
+  min-width:102px;
+  justify-content:center;
+}
+
 .btn{
   border:2px solid #111;
   background:var(--yellow);
@@ -936,6 +942,90 @@ h1,h2,h3{
     linear-gradient(140deg, #171717, #0b0b0b 66%);
 }
 
+.landing-auth-cta{
+  margin-top:18px;
+  border-top:1px solid #2f2f2f;
+  padding-top:14px;
+}
+
+.landing-auth-copy{
+  margin:0;
+}
+
+.landing-auth-actions{
+  margin-top:12px;
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0,1fr));
+  gap:16px;
+}
+
+.landing-auth-actions .btn{
+  min-height:50px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.reglamento-shell{
+  max-width:980px;
+  margin:0 auto;
+}
+
+.rules-layout{
+  display:grid;
+  gap:12px;
+}
+
+.rules-section{
+  border:1px solid #323232;
+  border-radius:12px;
+  padding:14px;
+  background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));
+}
+
+.rules-list{
+  margin-top:8px;
+  margin-bottom:10px;
+  padding-left:18px;
+  display:grid;
+  gap:6px;
+}
+
+.rules-note{
+  border:1px solid rgba(255,209,0,.45);
+  border-radius:11px;
+  padding:12px;
+  background:linear-gradient(180deg, rgba(255,209,0,.16), rgba(255,209,0,.07));
+}
+
+.rules-example-grid{
+  margin-top:10px;
+  margin-bottom:10px;
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0,1fr));
+  gap:10px;
+}
+
+.rules-example{
+  border:1px solid #2e2e2e;
+  border-radius:10px;
+  padding:10px;
+  background:#0f0f0f;
+}
+
+.register-rules-box{
+  border:1px solid #303030;
+  border-radius:12px;
+  padding:10px;
+  max-height:320px;
+  overflow:auto;
+  background:rgba(0,0,0,.22);
+}
+
+.register-rules-check{
+  margin-top:10px;
+}
+
 .pick-grid{
   display:grid;
   gap:12px;
@@ -951,14 +1041,40 @@ h1,h2,h3{
   .grid.cols2{grid-template-columns:1fr}
   .grid.cols3{grid-template-columns:1fr}
   .pick-grid{grid-template-columns:1fr}
+  .landing-auth-actions{grid-template-columns:1fr; gap:12px}
+  .rules-example-grid{grid-template-columns:1fr}
+  .register-rules-box{max-height:260px}
   .wc-groups-grid{grid-template-columns:repeat(2, minmax(0,1fr))}
   .wc-fixtures-wrap{grid-template-columns:1fr}
   .top-strip-inner{min-height:56px}
   .logo-badge{font-size:24px; padding:7px 12px}
   .container{padding:14px 10px 24px}
-  .nav{padding:12px}
+  .nav{
+    padding:12px;
+    flex-wrap:wrap;
+    row-gap:10px;
+  }
+  .nav-toggle{
+    display:inline-flex;
+    margin-left:auto;
+  }
   .brand-main{font-size:19px}
-  .links{gap:7px}
+  .links{
+    display:none;
+    width:100%;
+    gap:8px;
+    align-items:stretch;
+    justify-content:flex-start;
+    border-top:1px solid rgba(255,209,0,.35);
+    padding-top:10px;
+  }
+  .links.open{display:grid}
+  .links .btn,
+  .links .pill{
+    width:100%;
+    justify-content:center;
+    text-align:center;
+  }
   .btn{padding:9px 12px}
   .table{display:block; overflow-x:auto}
 

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from './prisma.js';
 import { adminLeagueTeamSchema, createLeagueSchema, createMatchSchema, joinLeagueSchema, predictionSchema, setResultSchema, syncFixturesSchema } from './schemas.js';
 import { makeJoinCode } from './utils.js';
-import { calcPoints } from './points.js';
+import { calcPoints, CORRECT_WINNER_POINTS, EXACT_SCORE_POINTS } from './points.js';
 import { syncLeagueFixturesFromApiFootball } from './sync.js';
 
 function isSuperadmin(req: any) {
@@ -18,7 +18,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
 
     const uid = (req.user as any).uid as string;
-    const { name, description, isPublic, pointsExact, pointsOutcome } = parsed.data;
+    const { name, description, isPublic } = parsed.data;
 
     // joinCode único
     let code = makeJoinCode(6);
@@ -35,8 +35,8 @@ export async function leagueRoutes(app: FastifyInstance) {
         isPublic,
         joinCode: code,
         createdById: uid,
-        pointsExact: pointsExact ?? 3,
-        pointsOutcome: pointsOutcome ?? 1,
+        pointsExact: EXACT_SCORE_POINTS,
+        pointsOutcome: CORRECT_WINNER_POINTS,
         members: {
           create: { userId: uid, role: 'OWNER' },
         },
@@ -671,9 +671,7 @@ export async function leagueRoutes(app: FastifyInstance) {
             predHome,
             predAway,
             match.finalHome,
-            match.finalAway,
-            league.pointsExact,
-            league.pointsOutcome
+            match.finalAway
           )
         : null;
 
@@ -759,9 +757,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     const updates = preds.map(p => {
       const pts = calcPoints(
         p.predHome, p.predAway,
-        finalHome, finalAway,
-        p.league.pointsExact,
-        p.league.pointsOutcome
+        finalHome, finalAway
       );
       return prisma.prediction.update({ where: { id: p.id }, data: { points: pts } });
     });

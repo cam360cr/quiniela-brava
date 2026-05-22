@@ -3,7 +3,7 @@ import Nav from '../../components/Nav';
 const prizes = [
   {
     place: '1er lugar',
-    reward: 'USD $1000',
+    reward: 'USD $500',
     detail: 'Premio confirmado para el primer lugar del ranking final de la quiniela.',
   },
   {
@@ -44,7 +44,7 @@ export default function PremiosPage() {
 
       <section className="card" style={{ borderStyle: 'dashed' }}>
         <p className="small" style={{ margin: 0 }}>
-          Nota: de momento, el premio confirmado es el primer lugar con USD $1000.
+          Nota: de momento, el premio confirmado es el primer lugar con USD $500.
         </p>
       </section>
     </>
