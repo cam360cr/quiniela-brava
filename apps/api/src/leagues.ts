@@ -1,12 +1,271 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from './prisma.js';
-import { adminLeagueTeamSchema, createLeagueSchema, createMatchSchema, joinLeagueSchema, predictionSchema, setResultSchema, syncFixturesSchema } from './schemas.js';
+import { adminLeagueTeamSchema, bulkDeleteSchema, bulkDeleteTeamsSchema, createLeagueSchema, createMatchSchema, importMatchesCsvSchema, joinLeagueSchema, predictionSchema, setResultSchema } from './schemas.js';
 import { makeJoinCode } from './utils.js';
 import { calcPoints, CORRECT_WINNER_POINTS, EXACT_SCORE_POINTS } from './points.js';
-import { syncLeagueFixturesFromApiFootball } from './sync.js';
+
+type CsvMatchRow = {
+  rowNumber: number;
+  homeTeam: string;
+  awayTeam: string;
+  kickoffAt: Date;
+  lockAt: Date;
+  homeCode: string | null;
+  awayCode: string | null;
+  homeLogoUrl: string | null;
+  awayLogoUrl: string | null;
+};
+
+type CsvImportError = {
+  row: number;
+  message: string;
+};
+
+function parseCsvLine(line: string) {
+  const cells: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+        continue;
+      }
+
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (ch === ',' && !inQuotes) {
+      cells.push(current.trim().replace(/\r/g, ''));
+      current = '';
+      continue;
+    }
+
+    current += ch;
+  }
+
+  cells.push(current.trim().replace(/\r/g, ''));
+  return cells;
+}
+
+function normalizeCsvHeader(value: string) {
+  return value.toLowerCase().replace(/[\s_-]+/g, '');
+}
+
+function findCsvColumn(headers: string[], aliases: string[]) {
+  for (const alias of aliases) {
+    const index = headers.indexOf(alias);
+    if (index >= 0) return index;
+  }
+
+  return -1;
+}
+
+function parseCsvDateValue(raw: string) {
+  const value = raw.trim();
+  if (!value) return null;
+
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  const withSeconds = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(normalized)
+    ? `${normalized}:00`
+    : normalized;
+
+  const hasTimezone = /(Z|[+-]\d{2}:?\d{2})$/i.test(withSeconds);
+  if (hasTimezone) {
+    const parsedWithTimezone = new Date(withSeconds);
+    if (Number.isNaN(parsedWithTimezone.getTime())) return null;
+    return parsedWithTimezone;
+  }
+
+  const localMatch = withSeconds.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!localMatch) return null;
+
+  const year = Number(localMatch[1]);
+  const month = Number(localMatch[2]);
+  const day = Number(localMatch[3]);
+  const hour = Number(localMatch[4]);
+  const minute = Number(localMatch[5]);
+  const second = Number(localMatch[6] ?? '0');
+
+  // Costa Rica is UTC-6 all year; convert local wall time to UTC instant.
+  const parsedCostaRica = new Date(Date.UTC(year, month - 1, day, hour + 6, minute, second));
+  if (Number.isNaN(parsedCostaRica.getTime())) return null;
+  return parsedCostaRica;
+}
+
+function parseMatchesCsv(csvContent: string) {
+  const lines = csvContent
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0);
+
+  if (lines.length === 0) {
+    throw new Error('El CSV esta vacio');
+  }
+
+  const headers = parseCsvLine(lines[0]).map(normalizeCsvHeader);
+
+  const homeTeamIndex = findCsvColumn(headers, ['hometeam', 'home', 'local', 'equipolocal']);
+  const awayTeamIndex = findCsvColumn(headers, ['awayteam', 'away', 'visitante', 'equipovisitante']);
+  const kickoffAtIndex = findCsvColumn(headers, ['kickoffat', 'kickoff', 'horario', 'fecha', 'inicio', 'datetime']);
+  const lockAtIndex = findCsvColumn(headers, ['lockat', 'lock', 'cierre']);
+  const homeCodeIndex = findCsvColumn(headers, ['homecode', 'codigolocal']);
+  const awayCodeIndex = findCsvColumn(headers, ['awaycode', 'codigovisitante']);
+  const homeLogoUrlIndex = findCsvColumn(headers, ['homelogourl', 'logolocal']);
+  const awayLogoUrlIndex = findCsvColumn(headers, ['awaylogourl', 'logovisitante']);
+
+  if (homeTeamIndex < 0 || awayTeamIndex < 0 || kickoffAtIndex < 0) {
+    throw new Error('Encabezados requeridos: homeTeam, awayTeam, kickoffAt');
+  }
+
+  const rows: CsvMatchRow[] = [];
+  const errors: CsvImportError[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const rowNumber = i + 1;
+    const cells = parseCsvLine(lines[i]);
+
+    const getCell = (index: number) => (index >= 0 ? (cells[index] || '').trim() : '');
+
+    const homeTeam = getCell(homeTeamIndex);
+    const awayTeam = getCell(awayTeamIndex);
+    const kickoffRaw = getCell(kickoffAtIndex);
+    const lockRaw = getCell(lockAtIndex);
+
+    if (!homeTeam && !awayTeam && !kickoffRaw) continue;
+
+    if (!homeTeam || !awayTeam || !kickoffRaw) {
+      errors.push({ row: rowNumber, message: 'Faltan columnas requeridas en la fila' });
+      continue;
+    }
+
+    if (homeTeam.toLowerCase() === awayTeam.toLowerCase()) {
+      errors.push({ row: rowNumber, message: 'Local y visitante no pueden ser el mismo equipo' });
+      continue;
+    }
+
+    const kickoffAt = parseCsvDateValue(kickoffRaw);
+    if (!kickoffAt) {
+      errors.push({ row: rowNumber, message: `Horario invalido: ${kickoffRaw}` });
+      continue;
+    }
+
+    const lockAt = lockRaw ? parseCsvDateValue(lockRaw) : kickoffAt;
+    if (!lockAt) {
+      errors.push({ row: rowNumber, message: `Cierre invalido: ${lockRaw}` });
+      continue;
+    }
+
+    if (lockAt > kickoffAt) {
+      errors.push({ row: rowNumber, message: 'El cierre no puede ser despues del kickoff' });
+      continue;
+    }
+
+    rows.push({
+      rowNumber,
+      homeTeam,
+      awayTeam,
+      kickoffAt,
+      lockAt,
+      homeCode: getCell(homeCodeIndex).toUpperCase() || null,
+      awayCode: getCell(awayCodeIndex).toUpperCase() || null,
+      homeLogoUrl: getCell(homeLogoUrlIndex) || null,
+      awayLogoUrl: getCell(awayLogoUrlIndex) || null,
+    });
+  }
+
+  return { rows, errors };
+}
+
+async function findOrCreateTeamForCsvImport(params: {
+  leagueId: string;
+  name: string;
+  code: string | null;
+  logoUrl: string | null;
+}) {
+  const leagueId = params.leagueId;
+  const normalizedName = params.name.trim();
+  const normalizedCode = params.code?.trim().toUpperCase() || null;
+  const normalizedLogo = params.logoUrl?.trim() || null;
+
+  const byName = await prisma.team.findFirst({
+    where: {
+      leagueId,
+      name: {
+        equals: normalizedName,
+        mode: 'insensitive',
+      },
+    },
+  });
+
+  if (byName) {
+    let nextCode = byName.code;
+
+    if (normalizedCode && byName.code !== normalizedCode) {
+      const codeOwner = await prisma.team.findFirst({ where: { leagueId, code: normalizedCode } });
+      if (!codeOwner || codeOwner.id === byName.id) {
+        nextCode = normalizedCode;
+      }
+    }
+
+    const nextLogo = normalizedLogo || byName.logoUrl;
+    const requiresUpdate = byName.name !== normalizedName || byName.code !== nextCode || byName.logoUrl !== nextLogo;
+
+    if (!requiresUpdate) {
+      return { team: byName, created: false, updated: false };
+    }
+
+    const updatedTeam = await prisma.team.update({
+      where: { id: byName.id },
+      data: {
+        name: normalizedName,
+        code: nextCode,
+        logoUrl: nextLogo,
+      },
+    });
+
+    return { team: updatedTeam, created: false, updated: true };
+  }
+
+  if (normalizedCode) {
+    const byCode = await prisma.team.findFirst({ where: { leagueId, code: normalizedCode } });
+    if (byCode) {
+      const updatedTeam = await prisma.team.update({
+        where: { id: byCode.id },
+        data: {
+          name: normalizedName,
+          logoUrl: normalizedLogo || byCode.logoUrl,
+        },
+      });
+
+      return { team: updatedTeam, created: false, updated: true };
+    }
+  }
+
+  const createdTeam = await prisma.team.create({
+    data: {
+      leagueId,
+      name: normalizedName,
+      code: normalizedCode,
+      logoUrl: normalizedLogo,
+    },
+  });
+
+  return { team: createdTeam, created: true, updated: false };
+}
 
 function isSuperadmin(req: any) {
   return (req.user as any)?.role === 'SUPERADMIN';
+}
+
+function isCatalogFlagUrl(url: string | null | undefined) {
+  if (!url) return false;
+  return /^https:\/\/flagcdn\.com\/w\d+\//i.test(url.trim());
 }
 
 export async function leagueRoutes(app: FastifyInstance) {
@@ -226,6 +485,104 @@ export async function leagueRoutes(app: FastifyInstance) {
     });
   });
 
+  app.post('/admin/users/bulk-delete', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
+    const parsed = bulkDeleteSchema.safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
+
+    const requesterId = (req.user as any).uid as string;
+    const ids = Array.from(new Set(parsed.data.ids.map((id) => id.trim()).filter(Boolean)));
+
+    let deleted = 0;
+    const errors: Array<{ id: string; message: string }> = [];
+
+    for (const id of ids) {
+      if (id === requesterId) {
+        errors.push({ id, message: 'No puedes borrar tu propio usuario' });
+        continue;
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          role: true,
+          _count: {
+            select: {
+              createdLeagues: true,
+            },
+          },
+        },
+      });
+
+      if (!user) {
+        errors.push({ id, message: 'Usuario no encontrado' });
+        continue;
+      }
+
+      if (user.role === 'SUPERADMIN') {
+        errors.push({ id, message: 'No se puede borrar un usuario SUPERADMIN' });
+        continue;
+      }
+
+      if (user._count.createdLeagues > 0) {
+        errors.push({ id, message: 'No se puede borrar un usuario que creo quinielas' });
+        continue;
+      }
+
+      try {
+        await prisma.$transaction([
+          prisma.prediction.deleteMany({ where: { userId: id } }),
+          prisma.leagueMember.deleteMany({ where: { userId: id } }),
+          prisma.finalPick.deleteMany({ where: { userId: id } }),
+          prisma.userProfile.deleteMany({ where: { userId: id } }),
+          prisma.user.delete({ where: { id } }),
+        ]);
+        deleted += 1;
+      } catch (error: any) {
+        errors.push({ id, message: error?.message ?? 'No se pudo borrar el usuario' });
+      }
+    }
+
+    return reply.send({
+      summary: {
+        requested: ids.length,
+        deleted,
+        skipped: errors.length,
+      },
+      errors: errors.slice(0, 50),
+    });
+  });
+
+  app.post('/admin/reset-league-data', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (_req, reply) => {
+    const [leaguesCount, teamsCount, matchesCount, predictionsCount, membersCount] = await Promise.all([
+      prisma.league.count(),
+      prisma.team.count(),
+      prisma.match.count(),
+      prisma.prediction.count(),
+      prisma.leagueMember.count(),
+    ]);
+
+    await prisma.$transaction([
+      prisma.prediction.deleteMany({}),
+      prisma.match.deleteMany({}),
+      prisma.team.deleteMany({}),
+      prisma.leagueMember.deleteMany({}),
+      prisma.league.deleteMany({}),
+    ]);
+
+    return reply.send({
+      ok: true,
+      deleted: {
+        leagues: leaguesCount,
+        teams: teamsCount,
+        matches: matchesCount,
+        predictions: predictionsCount,
+        members: membersCount,
+      },
+      usersPreserved: true,
+    });
+  });
+
   app.get('/admin/teams', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
     const leagueId = String((req.query as any)?.leagueId || '').trim();
     const q = String((req.query as any)?.q || '').trim();
@@ -236,10 +593,7 @@ export async function leagueRoutes(app: FastifyInstance) {
 
     const teams = await prisma.team.findMany({
       where: q
-        ? {
-            leagueId,
-            OR: [{ name: { contains: q, mode: 'insensitive' } }, { code: { contains: q, mode: 'insensitive' } }],
-          }
+        ? { leagueId, name: { contains: q, mode: 'insensitive' } }
         : { leagueId },
       orderBy: [{ name: 'asc' }],
       take: 300,
@@ -257,7 +611,13 @@ export async function leagueRoutes(app: FastifyInstance) {
       orderBy: { createdAt: 'desc' },
     });
 
-    const images = Array.from(new Set(leagueRows.map((row) => row.logoUrl).filter(Boolean))) as string[];
+    const images = Array.from(
+      new Set(
+        leagueRows
+          .map((row) => row.logoUrl)
+          .filter((url): url is string => Boolean(url) && !isCatalogFlagUrl(url))
+      )
+    );
 
     return reply.send({ images: images.slice(0, 200) });
   });
@@ -270,19 +630,13 @@ export async function leagueRoutes(app: FastifyInstance) {
 
     const leagueId = parsed.data.leagueId.trim();
     const name = parsed.data.name.trim();
-    const code = parsed.data.code?.trim() || null;
     const logoUrl = parsed.data.logoUrl.trim();
 
     const league = await prisma.league.findUnique({ where: { id: leagueId } });
     if (!league) return reply.code(404).send({ error: 'League not found' });
 
-    if (code) {
-      const existingCode = await prisma.team.findFirst({ where: { leagueId, code } });
-      if (existingCode) return reply.code(409).send({ error: 'Code already in use' });
-    }
-
     const team = await prisma.team.create({
-      data: { leagueId, name, code, logoUrl },
+      data: { leagueId, name, logoUrl },
     });
 
     return reply.send({ team });
@@ -304,19 +658,11 @@ export async function leagueRoutes(app: FastifyInstance) {
     }
 
     const name = parsed.data.name.trim();
-    const code = parsed.data.code?.trim() || null;
     const logoUrl = parsed.data.logoUrl.trim();
-
-    if (code) {
-      const duplicate = await prisma.team.findFirst({ where: { leagueId, code } });
-      if (duplicate && duplicate.id !== id) {
-        return reply.code(409).send({ error: 'Code already in use' });
-      }
-    }
 
     const team = await prisma.team.update({
       where: { id },
-      data: { name, code, logoUrl },
+      data: { name, logoUrl },
     });
 
     return reply.send({ team });
@@ -334,11 +680,68 @@ export async function leagueRoutes(app: FastifyInstance) {
     });
 
     if (matchesUsingTeam > 0) {
-      return reply.code(409).send({ error: 'No puedes eliminar este equipo porque ya esta usado en partidos' });
+      return reply.code(409).send({
+        error: `No puedes eliminar este equipo porque tiene ${matchesUsingTeam} partidos. Primero borra esos partidos y luego elimina el equipo.`,
+      });
     }
 
     await prisma.team.delete({ where: { id } });
     return reply.send({ ok: true });
+  });
+
+  app.post('/admin/teams/bulk-delete', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
+    const parsed = bulkDeleteTeamsSchema.safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
+
+    const leagueId = parsed.data.leagueId.trim();
+    const ids = Array.from(new Set(parsed.data.ids.map((id) => id.trim()).filter(Boolean)));
+
+    let deleted = 0;
+    const errors: Array<{ id: string; message: string }> = [];
+
+    for (const id of ids) {
+      const team = await prisma.team.findUnique({
+        where: { id },
+        select: { id: true, leagueId: true, name: true },
+      });
+
+      if (!team) {
+        errors.push({ id, message: 'Equipo no encontrado' });
+        continue;
+      }
+
+      if (team.leagueId !== leagueId) {
+        errors.push({ id, message: 'El equipo no pertenece a la quiniela seleccionada' });
+        continue;
+      }
+
+      const matchesUsingTeam = await prisma.match.count({
+        where: {
+          OR: [{ homeTeamId: id }, { awayTeamId: id }],
+        },
+      });
+
+      if (matchesUsingTeam > 0) {
+        errors.push({ id, message: `Tiene ${matchesUsingTeam} partidos. Primero borra esos partidos y luego elimina el equipo.` });
+        continue;
+      }
+
+      try {
+        await prisma.team.delete({ where: { id } });
+        deleted += 1;
+      } catch (error: any) {
+        errors.push({ id, message: error?.message ?? 'No se pudo borrar el equipo' });
+      }
+    }
+
+    return reply.send({
+      summary: {
+        requested: ids.length,
+        deleted,
+        skipped: errors.length,
+      },
+      errors: errors.slice(0, 50),
+    });
   });
 
   // Equipos por quiniela (miembros pueden ver, OWNER puede crear)
@@ -359,10 +762,7 @@ export async function leagueRoutes(app: FastifyInstance) {
 
     const teams = await prisma.team.findMany({
       where: q
-        ? {
-            leagueId,
-            OR: [{ name: { contains: q, mode: 'insensitive' } }, { code: { contains: q, mode: 'insensitive' } }],
-          }
+        ? { leagueId, name: { contains: q, mode: 'insensitive' } }
         : { leagueId },
       orderBy: [{ name: 'asc' }],
       take: 300,
@@ -391,7 +791,11 @@ export async function leagueRoutes(app: FastifyInstance) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return reply.send({ images: rows.map((row) => row.logoUrl).filter(Boolean) });
+    return reply.send({
+      images: rows
+        .map((row) => row.logoUrl)
+        .filter((url): url is string => Boolean(url) && !isCatalogFlagUrl(url)),
+    });
   });
 
   app.post('/leagues/:id/teams', { preHandler: [app.authenticate] }, async (req, reply) => {
@@ -417,16 +821,10 @@ export async function leagueRoutes(app: FastifyInstance) {
     if (!league) return reply.code(404).send({ error: 'League not found' });
 
     const name = parsed.data.name.trim();
-    const code = parsed.data.code?.trim() || null;
     const logoUrl = parsed.data.logoUrl.trim();
 
-    if (code) {
-      const duplicate = await prisma.team.findFirst({ where: { leagueId, code } });
-      if (duplicate) return reply.code(409).send({ error: 'Code already in use' });
-    }
-
     const team = await prisma.team.create({
-      data: { leagueId, name, code, logoUrl },
+      data: { leagueId, name, logoUrl },
     });
 
     return reply.send({ team });
@@ -549,6 +947,114 @@ export async function leagueRoutes(app: FastifyInstance) {
     return reply.send({ match });
   });
 
+  // OWNER o SUPERADMIN: importar partidos desde CSV (nombre de equipo + horario)
+  app.post('/leagues/:id/matches/import-csv', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const parsed = importMatchesCsvSchema.safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
+
+    const uid = (req.user as any).uid as string;
+    const leagueId = (req.params as any).id as string;
+
+    const league = await prisma.league.findUnique({ where: { id: leagueId } });
+    if (!league) return reply.code(404).send({ error: 'League not found' });
+
+    const membership = await prisma.leagueMember.findUnique({
+      where: { leagueId_userId: { leagueId, userId: uid } },
+    });
+
+    const canManage = membership?.role === 'OWNER' || isSuperadmin(req);
+    if (!canManage) return reply.code(403).send({ error: 'Forbidden' });
+
+    let parsedCsv: { rows: CsvMatchRow[]; errors: CsvImportError[] };
+    try {
+      parsedCsv = parseMatchesCsv(parsed.data.csvContent);
+    } catch (error: any) {
+      return reply.code(400).send({ error: error?.message ?? 'CSV invalido' });
+    }
+
+    let createdTeams = 0;
+    let updatedTeams = 0;
+    let createdMatches = 0;
+    let updatedMatches = 0;
+    let unchangedMatches = 0;
+
+    const errors = [...parsedCsv.errors];
+
+    for (const row of parsedCsv.rows) {
+      try {
+        const homeResult = await findOrCreateTeamForCsvImport({
+          leagueId,
+          name: row.homeTeam,
+          code: row.homeCode,
+          logoUrl: row.homeLogoUrl,
+        });
+
+        const awayResult = await findOrCreateTeamForCsvImport({
+          leagueId,
+          name: row.awayTeam,
+          code: row.awayCode,
+          logoUrl: row.awayLogoUrl,
+        });
+
+        if (homeResult.created) createdTeams += 1;
+        if (awayResult.created) createdTeams += 1;
+        if (homeResult.updated) updatedTeams += 1;
+        if (awayResult.updated) updatedTeams += 1;
+
+        const existing = await prisma.match.findFirst({
+          where: {
+            leagueId,
+            homeTeamId: homeResult.team.id,
+            awayTeamId: awayResult.team.id,
+            kickoffAt: row.kickoffAt,
+          },
+        });
+
+        if (!existing) {
+          await prisma.match.create({
+            data: {
+              leagueId,
+              homeTeamId: homeResult.team.id,
+              awayTeamId: awayResult.team.id,
+              kickoffAt: row.kickoffAt,
+              lockAt: row.lockAt,
+            },
+          });
+          createdMatches += 1;
+          continue;
+        }
+
+        if (existing.lockAt.getTime() !== row.lockAt.getTime()) {
+          await prisma.match.update({
+            where: { id: existing.id },
+            data: { lockAt: row.lockAt },
+          });
+          updatedMatches += 1;
+        } else {
+          unchangedMatches += 1;
+        }
+      } catch (error: any) {
+        errors.push({
+          row: row.rowNumber,
+          message: error?.message ?? 'Error inesperado al importar fila',
+        });
+      }
+    }
+
+    return reply.send({
+      summary: {
+        rowsReceived: parsedCsv.rows.length,
+        createdTeams,
+        updatedTeams,
+        createdMatches,
+        updatedMatches,
+        unchangedMatches,
+        errorRows: errors.length,
+      },
+      errors: errors.slice(0, 40),
+    });
+  });
+
   // OWNER o SUPERADMIN: editar partido
   app.patch('/leagues/:leagueId/matches/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
     const parsed = createMatchSchema.safeParse(req.body);
@@ -636,6 +1142,49 @@ export async function leagueRoutes(app: FastifyInstance) {
     ]);
 
     return reply.send({ ok: true });
+  });
+
+  app.post('/leagues/:leagueId/matches/bulk-delete', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const parsed = bulkDeleteSchema.safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
+
+    const uid = (req.user as any).uid as string;
+    const leagueId = (req.params as any).leagueId as string;
+
+    const membership = await prisma.leagueMember.findUnique({
+      where: { leagueId_userId: { leagueId, userId: uid } },
+    });
+
+    const canManage = membership?.role === 'OWNER' || isSuperadmin(req);
+    if (!canManage) return reply.code(403).send({ error: 'Forbidden' });
+
+    const ids = Array.from(new Set(parsed.data.ids.map((id) => id.trim()).filter(Boolean)));
+
+    const existing = await prisma.match.findMany({
+      where: {
+        leagueId,
+        id: { in: ids },
+      },
+      select: { id: true },
+    });
+
+    const existingIds = existing.map((item) => item.id);
+
+    if (existingIds.length > 0) {
+      await prisma.$transaction([
+        prisma.prediction.deleteMany({ where: { matchId: { in: existingIds } } }),
+        prisma.match.deleteMany({ where: { leagueId, id: { in: existingIds } } }),
+      ]);
+    }
+
+    return reply.send({
+      summary: {
+        requested: ids.length,
+        deleted: existingIds.length,
+        skipped: ids.length - existingIds.length,
+      },
+      missingIds: ids.filter((id) => !existingIds.includes(id)).slice(0, 50),
+    });
   });
 
   // Guardar pronóstico (upsert)
@@ -767,43 +1316,4 @@ export async function leagueRoutes(app: FastifyInstance) {
     return reply.send({ match, updatedPredictions: preds.length });
   });
 
-  // OWNER o SUPERADMIN: sincronizar partidos de una liga desde API externa
-  app.post('/leagues/:id/sync/fixtures', { preHandler: [app.authenticate] }, async (req, reply) => {
-    const parsed = syncFixturesSchema.safeParse(req.body ?? {});
-    if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
-
-    const uid = (req.user as any).uid as string;
-    const leagueId = (req.params as any).id as string;
-
-    const league = await prisma.league.findUnique({ where: { id: leagueId } });
-    if (!league) return reply.code(404).send({ error: 'League not found' });
-
-    const membership = await prisma.leagueMember.findUnique({
-      where: { leagueId_userId: { leagueId, userId: uid } },
-    });
-
-    const canManage = membership?.role === 'OWNER' || isSuperadmin(req);
-    if (!canManage) return reply.code(403).send({ error: 'Only league owner or superadmin can sync fixtures' });
-
-    const season = parsed.data.season ?? 2026;
-    const externalLeagueId = parsed.data.externalLeagueId ?? 1;
-
-    try {
-      const result = await syncLeagueFixturesFromApiFootball({
-        leagueId,
-        season,
-        externalLeagueId,
-        from: parsed.data.from,
-        to: parsed.data.to,
-      });
-
-      return reply.send({ ok: true, leagueId, sync: result });
-    } catch (error: any) {
-      req.log.error({ err: error, leagueId }, 'fixtures sync failed');
-      return reply.code(502).send({
-        error: 'Sync failed',
-        message: error?.message ?? 'Provider error',
-      });
-    }
-  });
 }

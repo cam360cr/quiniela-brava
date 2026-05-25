@@ -307,6 +307,10 @@ h1,h2,h3{
   gap:8px;
 }
 
+.admin-subtabs-league-grid{
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+}
+
 .admin-subtab-btn{
   width:100%;
   min-height:44px;
@@ -357,9 +361,7 @@ h1,h2,h3{
 }
 
 .admin-active-league{
-  position:sticky;
-  top:74px;
-  z-index:6;
+  position:static;
 }
 
 .admin-active-league-grid{
@@ -381,28 +383,66 @@ h1,h2,h3{
 
 .admin-match-card{
   margin-top:0;
+  padding:14px;
+  border-color:#2f2f2f;
 }
 
-.admin-match-head{
+.admin-match-topline{
   display:flex;
-  gap:12px;
+  gap:10px;
   justify-content:space-between;
   align-items:flex-start;
   flex-wrap:wrap;
+  padding-bottom:8px;
+  border-bottom:1px solid rgba(255,255,255,.08);
 }
 
-.admin-match-teams{
-  flex:1 1 460px;
+.admin-match-title-wrap{
+  min-width:260px;
+  flex:1 1 360px;
 }
 
-.admin-match-teams .input{
-  min-width:150px;
-  flex:1;
+.admin-match-index{
+  display:inline-flex;
+  align-items:center;
+  padding:3px 8px;
+  border:1px solid rgba(255,209,0,.45);
+  border-radius:999px;
+  font-size:11px;
+  letter-spacing:.5px;
+  text-transform:uppercase;
+  color:var(--yellow-soft);
+}
+
+.admin-match-title{
+  margin:8px 0 0;
+  font-size:18px;
+  line-height:1.25;
+  color:#f7f7f7;
 }
 
 .admin-match-current{
-  min-width:130px;
-  text-align:right;
+  min-width:190px;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.admin-match-current-pill{
+  border:1px solid #333;
+  border-radius:999px;
+  padding:4px 10px;
+  background:#101010;
+  font-variant-numeric:tabular-nums;
+}
+
+.admin-match-edit-grid{
+  margin-top:10px;
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0,1fr));
+  gap:10px;
 }
 
 .admin-match-grid{
@@ -412,14 +452,28 @@ h1,h2,h3{
   gap:10px;
 }
 
+.admin-match-score{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0,1fr));
+  gap:8px;
+}
+
 .admin-match-score .input{
-  max-width:88px;
+  min-width:0;
   text-align:center;
   font-variant-numeric:tabular-nums;
 }
 
 .admin-match-actions{
   margin-top:12px;
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0,1fr));
+  gap:8px;
+}
+
+.admin-match-action-btn{
+  width:100%;
+  min-width:0;
 }
 
 .admin-proof-modal-backdrop{
@@ -1092,7 +1146,9 @@ h1,h2,h3{
   }
 
   .admin-active-league-grid,
-  .admin-match-grid{
+  .admin-match-edit-grid,
+  .admin-match-grid,
+  .admin-match-actions{
     grid-template-columns:1fr;
   }
 
@@ -1105,7 +1161,11 @@ h1,h2,h3{
   }
 
   .admin-match-current{
-    text-align:left;
+    justify-content:flex-start;
+  }
+
+  .admin-match-title{
+    font-size:16px;
   }
 
   .admin-equal-btn{
@@ -1117,9 +1177,7 @@ h1,h2,h3{
     width:100%;
   }
 
-  .admin-match-actions .btn{
-    width:100%;
-  }
+  .admin-match-action-btn{width:100%}
 }
 
 @media (max-width: 1100px){

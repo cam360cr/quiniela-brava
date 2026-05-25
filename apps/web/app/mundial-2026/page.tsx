@@ -1,4 +1,5 @@
 import Nav from '../../components/Nav';
+import { flagCodeByTeam, toSpanishTeamName } from '../../lib/teamNames';
 
 type Group = {
   id: string;
@@ -13,59 +14,8 @@ type Fixture = {
   city: string;
 };
 
-const flagCodes: Record<string, string> = {
-  Mexico: 'mx',
-  'South Africa': 'za',
-  'South Korea': 'kr',
-  'Czech Republic': 'cz',
-  Canada: 'ca',
-  'Bosnia and Herzegovina': 'ba',
-  Qatar: 'qa',
-  Switzerland: 'ch',
-  Brazil: 'br',
-  Morocco: 'ma',
-  Haiti: 'ht',
-  Scotland: 'gb',
-  'United States': 'us',
-  Paraguay: 'py',
-  Australia: 'au',
-  Turkey: 'tr',
-  Germany: 'de',
-  Curacao: 'cw',
-  'Ivory Coast': 'ci',
-  Ecuador: 'ec',
-  Netherlands: 'nl',
-  Japan: 'jp',
-  Sweden: 'se',
-  Tunisia: 'tn',
-  Belgium: 'be',
-  Egypt: 'eg',
-  Iran: 'ir',
-  'New Zealand': 'nz',
-  Spain: 'es',
-  'Cape Verde': 'cv',
-  'Saudi Arabia': 'sa',
-  Uruguay: 'uy',
-  France: 'fr',
-  Senegal: 'sn',
-  Iraq: 'iq',
-  Norway: 'no',
-  Argentina: 'ar',
-  Algeria: 'dz',
-  Austria: 'at',
-  Jordan: 'jo',
-  Portugal: 'pt',
-  'DR Congo': 'cd',
-  Uzbekistan: 'uz',
-  Colombia: 'co',
-  England: 'gb',
-  Croatia: 'hr',
-  Ghana: 'gh',
-  Panama: 'pa',
-};
-
 function TeamName({ team }: { team: string }) {
-  const code = flagCodes[team];
+  const code = flagCodeByTeam[team];
   const src = code ? `https://flagcdn.com/w40/${code}.png` : '';
 
   return (
@@ -73,7 +23,7 @@ function TeamName({ team }: { team: string }) {
       <span className="wc-flag" aria-hidden="true">
         {src ? <img className="wc-flag-img" src={src} alt="" loading="lazy" /> : <span>?</span>}
       </span>
-      <span>{team}</span>
+      <span>{toSpanishTeamName(team)}</span>
     </span>
   );
 }

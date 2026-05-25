@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Nav from '../../../components/Nav';
 import { apiFetch } from '../../../lib/api';
 import { useMe } from '../../../lib/hooks';
+import { flagCatalog, normalizeSearchText, toSpanishTeamName } from '../../../lib/teamNames';
 
 type MatchItem = {
   id: string;
@@ -20,66 +21,26 @@ type MatchItem = {
 type LeagueTeam = {
   id: string;
   name: string;
-  code: string | null;
   logoUrl: string | null;
 };
 
-const countryFlagCodes: Record<string, string> = {
-  Mexico: 'mx',
-  'South Africa': 'za',
-  'South Korea': 'kr',
-  'Czech Republic': 'cz',
-  Canada: 'ca',
-  'Bosnia and Herzegovina': 'ba',
-  Qatar: 'qa',
-  Switzerland: 'ch',
-  Brazil: 'br',
-  Morocco: 'ma',
-  Haiti: 'ht',
-  Scotland: 'gb',
-  'United States': 'us',
-  Paraguay: 'py',
-  Australia: 'au',
-  Turkey: 'tr',
-  Germany: 'de',
-  Curacao: 'cw',
-  'Ivory Coast': 'ci',
-  Ecuador: 'ec',
-  Netherlands: 'nl',
-  Japan: 'jp',
-  Sweden: 'se',
-  Tunisia: 'tn',
-  Belgium: 'be',
-  Egypt: 'eg',
-  Iran: 'ir',
-  'New Zealand': 'nz',
-  Spain: 'es',
-  'Cape Verde': 'cv',
-  'Saudi Arabia': 'sa',
-  Uruguay: 'uy',
-  France: 'fr',
-  Senegal: 'sn',
-  Iraq: 'iq',
-  Norway: 'no',
-  Argentina: 'ar',
-  Algeria: 'dz',
-  Austria: 'at',
-  Jordan: 'jo',
-  Portugal: 'pt',
-  'DR Congo': 'cd',
-  Uzbekistan: 'uz',
-  Colombia: 'co',
-  England: 'gb',
-  Croatia: 'hr',
-  Ghana: 'gh',
-  Panama: 'pa',
-  'Costa Rica': 'cr',
+type CsvImportResponse = {
+  summary: {
+    rowsReceived: number;
+    createdTeams: number;
+    updatedTeams: number;
+    createdMatches: number;
+    updatedMatches: number;
+    unchangedMatches: number;
+    errorRows: number;
+  };
+  errors: Array<{
+    row: number;
+    message: string;
+  }>;
 };
 
-const flagCatalog = Object.entries(countryFlagCodes).map(([country, code]) => ({
-  country,
-  url: `https://flagcdn.com/w80/${code}.png`,
-}));
+const COSTA_RICA_TIMEZONE = 'America/Costa_Rica';
 
 function parseScoreInput(raw: string, label: string) {
   const value = raw.trim();
@@ -99,6 +60,7 @@ function dateLabel(value: string) {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+    timeZone: COSTA_RICA_TIMEZONE,
   });
 }
 
@@ -106,6 +68,8 @@ function timeLabel(value: string) {
   return new Date(value).toLocaleTimeString('es-CR', {
     hour: 'numeric',
     minute: '2-digit',
+    hour12: false,
+    timeZone: COSTA_RICA_TIMEZONE,
   });
 }
 
@@ -127,13 +91,15 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
   const [teamImages, setTeamImages] = useState<string[]>([]);
   const [flagSearch, setFlagSearch] = useState('');
   const [teamName, setTeamName] = useState('');
-  const [teamCode, setTeamCode] = useState('');
   const [teamLogoUrl, setTeamLogoUrl] = useState('');
 
   const [homeTeamId, setHomeTeamId] = useState('');
   const [awayTeamId, setAwayTeamId] = useState('');
   const [kickoffAt, setKickoffAt] = useState('');
   const [matchesTab, setMatchesTab] = useState<'open' | 'closed'>('open');
+  const [csvContent, setCsvContent] = useState('');
+  const [csvFileName, setCsvFileName] = useState('');
+  const [importingCsv, setImportingCsv] = useState(false);
 
   async function load() {
     const r = await apiFetch<{ league: any; matches: MatchItem[]; canManage: boolean }>(`/leagues/${leagueId}/matches`);
@@ -173,6 +139,49 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
     setTeamImages(r.images);
   }
 
+  async function importMatchesFromCsv() {
+    if (importingCsv) return;
+
+    setMsg(null);
+    setImportingCsv(true);
+
+    try {
+      const content = csvContent.trim();
+      if (!content) throw new Error('Debes cargar o pegar el contenido CSV');
+
+      const response = await apiFetch<CsvImportResponse>(`/leagues/${leagueId}/matches/import-csv`, {
+        method: 'POST',
+        body: JSON.stringify({ csvContent: content }),
+      });
+
+      await Promise.all([load(), loadLeagueTeams()]);
+
+      const previewErrors = response.errors
+        .slice(0, 3)
+        .map((item) => `fila ${item.row}: ${item.message}`)
+        .join(' | ');
+
+      let message =
+        `Importacion lista: ${response.summary.createdMatches} partidos nuevos, ` +
+        `${response.summary.updatedMatches} actualizados, ` +
+        `${response.summary.createdTeams} equipos nuevos.`;
+
+      if (response.summary.errorRows > 0) {
+        message += ` Filas con error: ${response.summary.errorRows}.`;
+      }
+
+      if (previewErrors) {
+        message += ` Ejemplos: ${previewErrors}`;
+      }
+
+      setMsg(message);
+    } catch (e: any) {
+      setMsg(e?.message ?? 'No se pudo importar el CSV');
+    } finally {
+      setImportingCsv(false);
+    }
+  }
+
   function fileToDataUrl(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -182,10 +191,19 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
     });
   }
 
+  function fileToText(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo CSV'));
+      reader.readAsText(file);
+    });
+  }
+
   const filteredFlags = useMemo(() => {
-    const query = flagSearch.trim().toLowerCase();
+    const query = normalizeSearchText(flagSearch);
     if (!query) return flagCatalog;
-    return flagCatalog.filter((item) => item.country.toLowerCase().includes(query));
+    return flagCatalog.filter((item) => normalizeSearchText(`${item.name} ${item.spanishName}`).includes(query));
   }, [flagSearch]);
 
   const now = Date.now();
@@ -252,7 +270,19 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
 
         {msg && <div className="qb-alert">{msg}</div>}
 
-        {canManage && (
+        {canManage && me?.role === 'SUPERADMIN' && (
+          <section className="card qb-admin-panel">
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Gestion centralizada</h3>
+            <p className="small" style={{ marginTop: 0 }}>
+              Para evitar duplicidad, la gestion de equipos, partidos y usuarios se unifico en el panel Admin global.
+            </p>
+            <div className="row-actions" style={{ marginTop: 10 }}>
+              <Link className="btn primary" href="/admin">Abrir Admin global</Link>
+            </div>
+          </section>
+        )}
+
+        {canManage && me?.role !== 'SUPERADMIN' && (
           <details className="card qb-admin-panel">
             <summary>Panel admin: equipos y partidos</summary>
 
@@ -263,31 +293,25 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
               <div className="label">Nombre</div>
               <input className="input" value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="Ej: Costa Rica" />
 
-              <div className="grid cols2">
-                <div>
-                  <div className="label">Codigo</div>
-                  <input className="input" value={teamCode} onChange={(e) => setTeamCode(e.target.value.toUpperCase())} placeholder="CRC" />
-                </div>
-                <div>
-                  <div className="label">Foto (URL o archivo)</div>
-                  <input className="input" value={teamLogoUrl} onChange={(e) => setTeamLogoUrl(e.target.value)} placeholder="https://..." />
-                  <input
-                    className="input"
-                    style={{ marginTop: 8 }}
-                    type="file"
-                    accept="image/*"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      try {
-                        const dataUrl = await fileToDataUrl(file);
-                        setTeamLogoUrl(dataUrl);
-                      } catch (error: any) {
-                        setMsg(error?.message ?? 'No se pudo leer la imagen');
-                      }
-                    }}
-                  />
-                </div>
+              <div>
+                <div className="label">Foto (URL o archivo)</div>
+                <input className="input" value={teamLogoUrl} onChange={(e) => setTeamLogoUrl(e.target.value)} placeholder="https://..." />
+                <input
+                  className="input"
+                  style={{ marginTop: 8 }}
+                  type="file"
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      const dataUrl = await fileToDataUrl(file);
+                      setTeamLogoUrl(dataUrl);
+                    } catch (error: any) {
+                      setMsg(error?.message ?? 'No se pudo leer la imagen');
+                    }
+                  }}
+                />
               </div>
 
               {teamLogoUrl && (
@@ -319,21 +343,21 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                 <div className="small" style={{ marginBottom: 8 }}>Banderas por pais (buscable)</div>
                 <input
                   className="input"
-                  placeholder="Buscar pais, ej: Argentina"
+                  placeholder="Buscar pais, ej: Argentina o Alemania"
                   value={flagSearch}
                   onChange={(e) => setFlagSearch(e.target.value)}
                 />
                 <div className="image-library" style={{ marginTop: 8 }}>
                   {filteredFlags.map((item) => (
                     <button
-                      key={item.country}
+                      key={item.name}
                       type="button"
                       className={`image-pick image-pick-country ${teamLogoUrl === item.url ? 'active' : ''}`}
                       onClick={() => setTeamLogoUrl(item.url)}
-                      title={`Usar bandera de ${item.country}`}
+                      title={`Usar bandera de ${item.spanishName}`}
                     >
-                      <img src={item.url} alt={item.country} />
-                      <span>{item.country}</span>
+                      <img src={item.url} alt={item.spanishName} />
+                      <span>{item.spanishName}</span>
                     </button>
                   ))}
                 </div>
@@ -352,13 +376,11 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                         method: 'POST',
                         body: JSON.stringify({
                           name: teamName,
-                          code: teamCode || null,
                           logoUrl: teamLogoUrl,
                         }),
                       });
 
                       setTeamName('');
-                      setTeamCode('');
                       setTeamLogoUrl('');
                       await Promise.all([loadLeagueTeams(), loadTeamImages()]);
                       setMsg('Equipo agregado a la quiniela.');
@@ -379,14 +401,13 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
               ) : (
                 <table className="table">
                   <thead>
-                    <tr><th>Equipo</th><th>Codigo</th><th>Bandera/logo</th></tr>
+                    <tr><th>Equipo</th><th>Bandera/logo</th></tr>
                   </thead>
                   <tbody>
                     {leagueTeams.map((team) => (
                       <tr key={team.id}>
-                        <td>{team.name}</td>
-                        <td>{team.code || '-'}</td>
-                        <td>{team.logoUrl ? <img src={team.logoUrl} alt={team.name} className="team-logo-thumb" /> : <span className="small">-</span>}</td>
+                        <td>{toSpanishTeamName(team.name)}</td>
+                        <td>{team.logoUrl ? <img src={team.logoUrl} alt={toSpanishTeamName(team.name)} className="team-logo-thumb" /> : <span className="small">-</span>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -403,14 +424,14 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                   <div className="label">Equipo local</div>
                   <select className="input" value={homeTeamId} onChange={(e) => setHomeTeamId(e.target.value)}>
                     <option value="">Selecciona equipo</option>
-                    {leagueTeams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+                    {leagueTeams.map((team) => <option key={team.id} value={team.id}>{toSpanishTeamName(team.name)}</option>)}
                   </select>
                 </div>
                 <div>
                   <div className="label">Equipo visitante</div>
                   <select className="input" value={awayTeamId} onChange={(e) => setAwayTeamId(e.target.value)}>
                     <option value="">Selecciona equipo</option>
-                    {leagueTeams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+                    {leagueTeams.map((team) => <option key={team.id} value={team.id}>{toSpanishTeamName(team.name)}</option>)}
                   </select>
                 </div>
                 <div>
@@ -452,6 +473,76 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                   }}
                 >
                   Agregar partido
+                </button>
+              </div>
+            </div>
+
+            <div className="card" style={{ marginTop: 10, padding: 12 }}>
+              <h3 style={{ marginTop: 0, marginBottom: 8 }}>3) Importar partidos por CSV</h3>
+              <p className="small" style={{ marginTop: 0 }}>
+                Puedes cargar muchos partidos de una vez con columnas <b>homeTeam, awayTeam, kickoffAt</b>.
+                Opcionalmente puedes incluir <b>lockAt, homeLogoUrl, awayLogoUrl</b>.
+                La quiniela muestra horarios en hora de Costa Rica.
+              </p>
+
+              <p className="small" style={{ marginTop: 0 }}>
+                Recomendado: usar fechas con zona, por ejemplo <b>2026-06-11T10:00:00-06:00</b>.
+                Si no envias zona horaria, se asumira hora de Costa Rica.
+              </p>
+
+              <div className="row-actions" style={{ marginBottom: 8 }}>
+                <a className="btn" href="/templates/quiniela_mundial_2026_grupos.csv" download>
+                  Descargar CSV base fase de grupos
+                </a>
+              </div>
+
+              <div className="label">Archivo CSV</div>
+              <input
+                className="input"
+                type="file"
+                accept=".csv,text/csv"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+
+                  try {
+                    const text = await fileToText(file);
+                    setCsvContent(text);
+                    setCsvFileName(file.name);
+                  } catch (error: any) {
+                    setMsg(error?.message ?? 'No se pudo leer el archivo CSV');
+                  }
+                }}
+              />
+
+              {csvFileName && (
+                <p className="small" style={{ marginTop: 8, marginBottom: 0 }}>
+                  Archivo cargado: <b>{csvFileName}</b>
+                </p>
+              )}
+
+              <div className="label">Contenido CSV (editable)</div>
+              <textarea
+                className="input"
+                style={{ minHeight: 200, fontFamily: 'monospace' }}
+                value={csvContent}
+                onChange={(e) => setCsvContent(e.target.value)}
+                placeholder={'homeTeam,awayTeam,kickoffAt\nMexico,South Africa,2026-06-11T10:00:00-06:00'}
+              />
+
+              <div className="row-actions" style={{ marginTop: 12 }}>
+                <button className="btn primary" disabled={importingCsv} onClick={importMatchesFromCsv}>
+                  {importingCsv ? 'Importando...' : 'Importar CSV a esta quiniela'}
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    setCsvContent('');
+                    setCsvFileName('');
+                  }}
+                >
+                  Limpiar
                 </button>
               </div>
             </div>
@@ -507,28 +598,28 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                         {m.homeTeam.logoUrl ? (
                           <img
                             src={m.homeTeam.logoUrl}
-                            alt={m.homeTeam.name}
+                            alt={toSpanishTeamName(m.homeTeam.name)}
                             className="team-logo-thumb"
                             onError={(e) => {
                               (e.currentTarget as HTMLImageElement).style.display = 'none';
                             }}
                           />
                         ) : null}
-                        <span className="qb-team-name">{m.homeTeam.name}</span>
+                        <span className="qb-team-name">{toSpanishTeamName(m.homeTeam.name)}</span>
                       </div>
                       <span className="qb-vs">vs</span>
                       <div className="qb-team">
                         {m.awayTeam.logoUrl ? (
                           <img
                             src={m.awayTeam.logoUrl}
-                            alt={m.awayTeam.name}
+                            alt={toSpanishTeamName(m.awayTeam.name)}
                             className="team-logo-thumb"
                             onError={(e) => {
                               (e.currentTarget as HTMLImageElement).style.display = 'none';
                             }}
                           />
                         ) : null}
-                        <span className="qb-team-name">{m.awayTeam.name}</span>
+                        <span className="qb-team-name">{toSpanishTeamName(m.awayTeam.name)}</span>
                       </div>
                     </div>
 

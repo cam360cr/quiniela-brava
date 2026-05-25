@@ -41,6 +41,21 @@ export const createMatchSchema = z.object({
   lockAt: z.string().datetime().optional(),
 });
 
+export const importMatchesCsvSchema = z.object({
+  csvContent: z.string().min(1).max(2_000_000),
+});
+
+const bulkIdsSchema = z.array(z.string().min(3)).min(1).max(500);
+
+export const bulkDeleteSchema = z.object({
+  ids: bulkIdsSchema,
+});
+
+export const bulkDeleteTeamsSchema = z.object({
+  leagueId: z.string().min(3),
+  ids: bulkIdsSchema,
+});
+
 export const predictionSchema = z.object({
   matchId: z.string(),
   predHome: z.number().int().min(0).max(99),
@@ -51,13 +66,6 @@ export const setResultSchema = z.object({
   finalHome: z.number().int().min(0).max(99),
   finalAway: z.number().int().min(0).max(99),
 });
-
-export const syncFixturesSchema = z.object({
-  season: z.number().int().min(2020).max(2100).optional(),
-  externalLeagueId: z.number().int().min(1).optional(),
-  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-});
 const imageHttpUrlSchema = z.string().url().refine((url) => {
   const clean = url.split('#')[0].split('?')[0].toLowerCase();
   return /\.(png|jpg|jpeg|webp|gif|svg)$/.test(clean);
@@ -67,6 +75,5 @@ const teamImageSchema = z.union([imageHttpUrlSchema, imageDataUrlSchema]);
 export const adminLeagueTeamSchema = z.object({
   leagueId: z.string().min(3),
   name: z.string().min(2).max(64),
-  code: z.string().min(2).max(8).optional().nullable(),
   logoUrl: teamImageSchema,
 });
