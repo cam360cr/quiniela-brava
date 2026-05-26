@@ -39,6 +39,7 @@ export const createMatchSchema = z.object({
   awayTeam: z.string().min(2).max(64),
   kickoffAt: z.string().datetime(),
   lockAt: z.string().datetime().optional(),
+  group: z.string().trim().min(1).max(64).optional(),
 });
 
 export const importMatchesCsvSchema = z.object({

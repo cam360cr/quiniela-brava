@@ -85,6 +85,50 @@ npm run dev
 - API: http://localhost:7432
 - WEB: http://localhost:8371
 
+## 7) Correr con Docker (VPS)
+
+Esta opcion levanta **Postgres + API + Web** con un solo comando.
+
+### Variables importantes
+- `JWT_SECRET`: cambia este valor en produccion.
+
+En Linux/macOS:
+```bash
+export JWT_SECRET="pon_un_secreto_largo_y_random"
+```
+
+En PowerShell:
+```powershell
+$env:JWT_SECRET="pon_un_secreto_largo_y_random"
+```
+
+### Levantar servicios
+```bash
+docker compose up -d --build
+```
+
+### Ver logs
+```bash
+docker compose logs -f api web postgres
+```
+
+### URLs por defecto
+- Web: http://TU_IP_O_DOMINIO:8371
+- API health: http://TU_IP_O_DOMINIO:7432/health
+
+Notas:
+- El contenedor `api` ejecuta `prisma migrate deploy` al iniciar, para aplicar migraciones pendientes.
+- Si actualizas codigo, vuelve a construir con `docker compose up -d --build`.
+
+## 8) Si ves errores de DB en Partidos/Admin
+
+Si el error menciona una columna faltante (por ejemplo `groupName`), significa que faltan migraciones en la base de datos.
+
+En local puedes ejecutarlo asi:
+```bash
+npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
+```
+
 ## Notas rápidas
 - Para cargar resultados: logueate con `admin@demo.com` y usa la pantalla "Admin" en la web.
 - El cierre de pronóstico se respeta con `lockAt`. Si la hora pasó, no deja guardar.

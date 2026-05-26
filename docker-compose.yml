@@ -2,6 +2,7 @@ services:
   postgres:
     image: postgres:16
     container_name: quiniela_pg
+    restart: unless-stopped
     environment:
       POSTGRES_USER: quiniela
       POSTGRES_PASSWORD: quiniela
@@ -10,5 +11,41 @@ services:
       - "5432:5432"
     volumes:
       - quiniela_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quiniela -d quiniela"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: quiniela_api
+    restart: unless-stopped
+    environment:
+      PORT: 7432
+      JWT_SECRET: ${JWT_SECRET:-cambia_esto_en_produccion}
+      DATABASE_URL: postgresql://quiniela:quiniela@postgres:5432/quiniela?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "7432:7432"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: quiniela_web
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:7432
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "8371:8371"
+
 volumes:
   quiniela_pg_data:

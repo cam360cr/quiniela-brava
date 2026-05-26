@@ -10,6 +10,7 @@ type CsvMatchRow = {
   awayTeam: string;
   kickoffAt: Date;
   lockAt: Date;
+  groupName: string | null;
   homeCode: string | null;
   awayCode: string | null;
   homeLogoUrl: string | null;
@@ -114,6 +115,7 @@ function parseMatchesCsv(csvContent: string) {
   const awayTeamIndex = findCsvColumn(headers, ['awayteam', 'away', 'visitante', 'equipovisitante']);
   const kickoffAtIndex = findCsvColumn(headers, ['kickoffat', 'kickoff', 'horario', 'fecha', 'inicio', 'datetime']);
   const lockAtIndex = findCsvColumn(headers, ['lockat', 'lock', 'cierre']);
+  const groupIndex = findCsvColumn(headers, ['group', 'groupname', 'grupo']);
   const homeCodeIndex = findCsvColumn(headers, ['homecode', 'codigolocal']);
   const awayCodeIndex = findCsvColumn(headers, ['awaycode', 'codigovisitante']);
   const homeLogoUrlIndex = findCsvColumn(headers, ['homelogourl', 'logolocal']);
@@ -172,6 +174,7 @@ function parseMatchesCsv(csvContent: string) {
       awayTeam,
       kickoffAt,
       lockAt,
+      groupName: getCell(groupIndex) || null,
       homeCode: getCell(homeCodeIndex).toUpperCase() || null,
       awayCode: getCell(awayCodeIndex).toUpperCase() || null,
       homeLogoUrl: getCell(homeLogoUrlIndex) || null,
@@ -888,7 +891,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     return reply.send({ league, matches: items, canManage });
   });
 
-  // OWNER: crear partido dentro de la quiniela
+  // OWNER o SUPERADMIN: crear partido dentro de la quiniela
   app.post('/leagues/:id/matches', { preHandler: [app.authenticate] }, async (req, reply) => {
     const parsed = createMatchSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
@@ -899,13 +902,13 @@ export async function leagueRoutes(app: FastifyInstance) {
       where: { leagueId_userId: { leagueId, userId: uid } },
     });
 
-    const canManage = membership?.role === 'OWNER';
+    const canManage = membership?.role === 'OWNER' || isSuperadmin(req);
     if (!canManage) return reply.code(403).send({ error: 'Forbidden' });
 
     const league = await prisma.league.findUnique({ where: { id: leagueId } });
     if (!league) return reply.code(404).send({ error: 'League not found' });
 
-    const { homeTeam, awayTeam, kickoffAt, lockAt } = parsed.data;
+    const { homeTeam, awayTeam, kickoffAt, lockAt, group } = parsed.data;
     if (homeTeam.trim().toLowerCase() === awayTeam.trim().toLowerCase()) {
       return reply.code(400).send({ error: 'Los equipos deben ser distintos' });
     }
@@ -921,6 +924,7 @@ export async function leagueRoutes(app: FastifyInstance) {
 
     const normalizedHome = homeTeam.trim();
     const normalizedAway = awayTeam.trim();
+    const normalizedGroup = group?.trim() || null;
 
     const [home, away] = await Promise.all([
       prisma.team.findFirst({ where: { leagueId, name: normalizedHome } }),
@@ -940,6 +944,7 @@ export async function leagueRoutes(app: FastifyInstance) {
         awayTeamId: away.id,
         kickoffAt: kickoffDate,
         lockAt: lockDate,
+        groupName: normalizedGroup,
       },
       include: { homeTeam: true, awayTeam: true },
     });
@@ -1018,16 +1023,23 @@ export async function leagueRoutes(app: FastifyInstance) {
               awayTeamId: awayResult.team.id,
               kickoffAt: row.kickoffAt,
               lockAt: row.lockAt,
+              groupName: row.groupName,
             },
           });
           createdMatches += 1;
           continue;
         }
 
-        if (existing.lockAt.getTime() !== row.lockAt.getTime()) {
+        const lockChanged = existing.lockAt.getTime() !== row.lockAt.getTime();
+        const groupChanged = (existing.groupName ?? null) !== row.groupName;
+
+        if (lockChanged || groupChanged) {
           await prisma.match.update({
             where: { id: existing.id },
-            data: { lockAt: row.lockAt },
+            data: {
+              lockAt: row.lockAt,
+              groupName: row.groupName,
+            },
           });
           updatedMatches += 1;
         } else {
@@ -1076,7 +1088,7 @@ export async function leagueRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: 'Match not found in this league' });
     }
 
-    const { homeTeam, awayTeam, kickoffAt, lockAt } = parsed.data;
+    const { homeTeam, awayTeam, kickoffAt, lockAt, group } = parsed.data;
     if (homeTeam.trim().toLowerCase() === awayTeam.trim().toLowerCase()) {
       return reply.code(400).send({ error: 'Los equipos deben ser distintos' });
     }
@@ -1092,6 +1104,7 @@ export async function leagueRoutes(app: FastifyInstance) {
 
     const normalizedHome = homeTeam.trim();
     const normalizedAway = awayTeam.trim();
+    const normalizedGroup = group?.trim() || null;
 
     const [home, away] = await Promise.all([
       prisma.team.findFirst({ where: { leagueId, name: normalizedHome } }),
@@ -1111,6 +1124,7 @@ export async function leagueRoutes(app: FastifyInstance) {
         awayTeamId: away.id,
         kickoffAt: kickoffDate,
         lockAt: lockDate,
+        groupName: normalizedGroup,
       },
       include: { homeTeam: true, awayTeam: true },
     });

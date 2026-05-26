@@ -114,6 +114,7 @@ model Match {
 
   kickoffAt    DateTime
   lockAt       DateTime
+  groupName    String?
 
   finalHome    Int?
   finalAway    Int?
