@@ -8,7 +8,7 @@ COPY apps/web/package.json apps/web/package.json
 RUN npm ci
 
 COPY . .
-ARG NEXT_PUBLIC_API_URL=http://localhost:7432
+ARG NEXT_PUBLIC_API_URL=/backend
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN npm run build -w @quiniela/web
 

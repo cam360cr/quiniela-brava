@@ -7,8 +7,6 @@ services:
       POSTGRES_USER: quiniela
       POSTGRES_PASSWORD: quiniela
       POSTGRES_DB: quiniela
-    ports:
-      - "5432:5432"
     volumes:
       - quiniela_pg_data:/var/lib/postgresql/data
     healthcheck:
@@ -30,24 +28,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "6371:6371"
 
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:6371
+        NEXT_PUBLIC_API_URL: /backend
     container_name: quiniela_web
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:6371
+      NEXT_PUBLIC_API_URL: /backend
     depends_on:
       api:
         condition: service_started
     ports:
-      - "8371:8371"
+      - "6371:8371"
 
 volumes:
   quiniela_pg_data:
