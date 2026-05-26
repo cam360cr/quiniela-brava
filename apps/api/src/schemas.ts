@@ -63,6 +63,13 @@ export const predictionSchema = z.object({
   predAway: z.number().int().min(0).max(99),
 });
 
+const predictionsArraySchema = z.array(predictionSchema).min(1).max(200);
+
+export const bulkPredictionsSchema = z.union([
+  predictionsArraySchema,
+  z.object({ predictions: predictionsArraySchema }),
+]);
+
 export const setResultSchema = z.object({
   finalHome: z.number().int().min(0).max(99),
   finalAway: z.number().int().min(0).max(99),

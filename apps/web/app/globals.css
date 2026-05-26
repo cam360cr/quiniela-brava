@@ -1421,6 +1421,57 @@ h1,h2,h3{
   min-width:0;
 }
 
+.qb-block-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  margin-bottom:4px;
+}
+
+.qb-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  padding:4px 8px;
+  font-size:11px;
+  line-height:1;
+  border:1px solid #3a3a3a;
+  background:#1a1a1a;
+  color:#cfcfcf;
+  white-space:nowrap;
+}
+
+.qb-badge.saved{
+  border-color:rgba(84,247,181,.65);
+  background:rgba(84,247,181,.14);
+  color:#b9fce0;
+}
+
+.qb-badge.pending{
+  border-color:rgba(255,209,0,.75);
+  background:rgba(255,209,0,.13);
+  color:#ffe37e;
+}
+
+.qb-badge.closed{
+  border-color:#5a5a5a;
+  background:#202020;
+  color:#bbbbbb;
+}
+
+.qb-badge.empty{
+  border-color:#3a3a3a;
+  background:#171717;
+  color:#a0a0a0;
+}
+
+.qb-inline-error{
+  margin-top:6px;
+  color:#ffb9b9;
+}
+
 .qb-result-editor{
   display:grid;
   gap:0;
@@ -1467,6 +1518,40 @@ h1,h2,h3{
   text-align:center;
   line-height:1;
   font-variant-numeric:tabular-nums;
+}
+
+.qb-pending-bar{
+  position:fixed;
+  left:50%;
+  transform:translateX(-50%);
+  bottom:14px;
+  width:min(980px, calc(100% - 24px));
+  border:1px solid rgba(255,209,0,.45);
+  border-radius:16px;
+  background:linear-gradient(180deg, rgba(30,30,30,.95), rgba(18,18,18,.96));
+  box-shadow:0 14px 30px rgba(0,0,0,.45);
+  padding:12px;
+  z-index:50;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  backdrop-filter:blur(4px);
+}
+
+.qb-pending-copy{
+  font-size:13px;
+  color:var(--yellow-soft);
+}
+
+.qb-pending-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.qb-pending-spacer{
+  height:92px;
 }
 
 .wc-hero{
@@ -1990,6 +2075,28 @@ h1,h2,h3{
 
   .qb-team{
     width:100%;
+  }
+
+  .qb-pending-bar{
+    width:calc(100% - 18px);
+    bottom:10px;
+    padding:10px;
+    gap:8px;
+    flex-direction:column;
+    align-items:stretch;
+  }
+
+  .qb-pending-actions{
+    width:100%;
+  }
+
+  .qb-pending-actions .btn{
+    flex:1;
+    min-width:0;
+  }
+
+  .qb-pending-spacer{
+    height:124px;
   }
 
   .register-shell{padding:14px}

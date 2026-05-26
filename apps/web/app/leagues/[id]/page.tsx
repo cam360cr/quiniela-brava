@@ -40,6 +40,28 @@ type CsvImportResponse = {
   }>;
 };
 
+type BulkPredictionResponse = {
+  summary: {
+    requested: number;
+    processed: number;
+    saved: number;
+    failed: number;
+  };
+  saved: Array<{
+    matchId: string;
+    predHome: number;
+    predAway: number;
+    points: number | null;
+  }>;
+  failed: Array<{
+    matchId: string;
+    error: string;
+    code: string;
+  }>;
+};
+
+type PredictionSaveErrorMap = Record<string, string>;
+
 const COSTA_RICA_TIMEZONE = 'America/Costa_Rica';
 
 function parseScoreInput(raw: string, label: string) {
@@ -84,6 +106,11 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
 
   const [predHome, setPredHome] = useState<Record<string, string>>({});
   const [predAway, setPredAway] = useState<Record<string, string>>({});
+  const [savedPredHome, setSavedPredHome] = useState<Record<string, string>>({});
+  const [savedPredAway, setSavedPredAway] = useState<Record<string, string>>({});
+  const [predictionSaveErrors, setPredictionSaveErrors] = useState<PredictionSaveErrorMap>({});
+  const [savingPredictions, setSavingPredictions] = useState(false);
+  const [savingPredictionIds, setSavingPredictionIds] = useState<Record<string, true>>({});
   const [resultHome, setResultHome] = useState<Record<string, string>>({});
   const [resultAway, setResultAway] = useState<Record<string, string>>({});
 
@@ -125,6 +152,9 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
 
     setPredHome(ph);
     setPredAway(pa);
+    setSavedPredHome(ph);
+    setSavedPredAway(pa);
+    setPredictionSaveErrors({});
     setResultHome(rh);
     setResultAway(ra);
   }
@@ -210,6 +240,215 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
   const openMatches = matches.filter((m) => new Date(m.lockAt).getTime() > now);
   const closedMatches = matches.filter((m) => new Date(m.lockAt).getTime() <= now);
   const visibleMatches = matchesTab === 'open' ? openMatches : closedMatches;
+  const matchById = useMemo(() => new Map(matches.map((match) => [match.id, match])), [matches]);
+
+  const pendingPredictionIds = useMemo(() => {
+    return matches
+      .filter((m) => {
+        const currentHome = (predHome[m.id] ?? '').trim();
+        const currentAway = (predAway[m.id] ?? '').trim();
+        const savedHome = (savedPredHome[m.id] ?? '').trim();
+        const savedAway = (savedPredAway[m.id] ?? '').trim();
+        return currentHome !== savedHome || currentAway !== savedAway;
+      })
+      .map((m) => m.id);
+  }, [matches, predHome, predAway, savedPredHome, savedPredAway]);
+
+  const pendingPredictionSet = useMemo(() => new Set(pendingPredictionIds), [pendingPredictionIds]);
+
+  function clearPredictionErrors(matchIds?: string[]) {
+    if (!matchIds || matchIds.length === 0) {
+      setPredictionSaveErrors({});
+      return;
+    }
+
+    setPredictionSaveErrors((prev) => {
+      const next = { ...prev };
+      matchIds.forEach((id) => {
+        delete next[id];
+      });
+      return next;
+    });
+  }
+
+  function discardPendingPredictions() {
+    setPredHome(savedPredHome);
+    setPredAway(savedPredAway);
+    clearPredictionErrors();
+    setMsg('Cambios descartados.');
+  }
+
+  async function saveAllPendingPredictions() {
+    if (savingPredictions) return;
+    if (pendingPredictionIds.length === 0) return;
+
+    setMsg(null);
+    setSavingPredictions(true);
+
+    const localFailed: Array<{ matchId: string; error: string; code: string }> = [];
+    const payload: Array<{ matchId: string; predHome: number; predAway: number }> = [];
+
+    for (const matchId of pendingPredictionIds) {
+      const match = matchById.get(matchId);
+      if (!match) {
+        localFailed.push({ matchId, error: 'Partido no encontrado', code: 'MATCH_NOT_FOUND' });
+        continue;
+      }
+
+      const locked = new Date(match.lockAt) <= new Date();
+      if (locked) {
+        localFailed.push({ matchId, error: 'El partido ya cerró', code: 'PREDICTION_LOCKED' });
+        continue;
+      }
+
+      try {
+        const predHomeValue = parseScoreInput(predHome[matchId] ?? '', 'Pronóstico local');
+        const predAwayValue = parseScoreInput(predAway[matchId] ?? '', 'Pronóstico visitante');
+        payload.push({
+          matchId,
+          predHome: predHomeValue,
+          predAway: predAwayValue,
+        });
+      } catch (error: any) {
+        localFailed.push({
+          matchId,
+          error: error?.message ?? 'Pronóstico inválido',
+          code: 'INVALID_SCORE',
+        });
+      }
+    }
+
+    setSavingPredictionIds(payload.reduce<Record<string, true>>((acc, item) => {
+      acc[item.matchId] = true;
+      return acc;
+    }, {}));
+
+    let backendSaved: BulkPredictionResponse['saved'] = [];
+    let backendFailed: BulkPredictionResponse['failed'] = [];
+
+    try {
+      if (payload.length > 0) {
+        const response = await apiFetch<BulkPredictionResponse>(`/leagues/${leagueId}/predictions/bulk`, {
+          method: 'POST',
+          body: JSON.stringify({ predictions: payload }),
+        });
+        backendSaved = response.saved;
+        backendFailed = response.failed;
+      }
+
+      if (backendSaved.length > 0) {
+        const savedMap = new Map(backendSaved.map((item) => [item.matchId, item]));
+
+        setSavedPredHome((prev) => {
+          const next = { ...prev };
+          backendSaved.forEach((item) => {
+            next[item.matchId] = String(item.predHome);
+          });
+          return next;
+        });
+
+        setSavedPredAway((prev) => {
+          const next = { ...prev };
+          backendSaved.forEach((item) => {
+            next[item.matchId] = String(item.predAway);
+          });
+          return next;
+        });
+
+        setMatches((prev) => prev.map((match) => {
+          const saved = savedMap.get(match.id);
+          if (!saved) return match;
+          return {
+            ...match,
+            myPrediction: {
+              predHome: saved.predHome,
+              predAway: saved.predAway,
+              points: saved.points,
+            },
+          };
+        }));
+      }
+
+      const allFailed = [...localFailed, ...backendFailed];
+      const nextErrors = allFailed.reduce<PredictionSaveErrorMap>((acc, item) => {
+        if (item.code === 'PREDICTION_LOCKED') {
+          acc[item.matchId] = 'No se guardó: partido cerrado';
+        } else {
+          acc[item.matchId] = item.error;
+        }
+        return acc;
+      }, {});
+      setPredictionSaveErrors(nextErrors);
+
+      const savedCount = backendSaved.length;
+      const failedCount = allFailed.length;
+      const closedCount = allFailed.filter((item) => item.code === 'PREDICTION_LOCKED').length;
+
+      if (savedCount > 0 && failedCount === 0) {
+        setMsg('Pronósticos guardados correctamente.');
+      } else if (savedCount > 0) {
+        if (closedCount > 0) {
+          setMsg(`Se guardaron ${savedCount} pronósticos. ${failedCount} no se pudieron guardar porque algunos partidos ya cerraron o tienen errores.`);
+        } else {
+          setMsg(`Se guardaron ${savedCount} pronósticos. ${failedCount} no se pudieron guardar.`);
+        }
+      } else if (failedCount > 0) {
+        if (closedCount > 0) {
+          setMsg('No se pudieron guardar los pronósticos pendientes porque algunos partidos ya cerraron o tienen datos inválidos.');
+        } else {
+          setMsg('No se pudieron guardar los pronósticos pendientes. Revisa los errores marcados.');
+        }
+      }
+    } catch (error: any) {
+      setMsg(error?.message ?? 'No se pudieron guardar los pronósticos');
+    } finally {
+      setSavingPredictionIds({});
+      setSavingPredictions(false);
+    }
+  }
+
+  useEffect(() => {
+    if (pendingPredictionIds.length === 0) return;
+
+    const warningMessage = 'Tienes pronósticos sin guardar. ¿Seguro que quieres salir?';
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = warningMessage;
+      return warningMessage;
+    };
+
+    const handleLinkNavigation = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+
+      const anchor = target.closest('a[href]') as HTMLAnchorElement | null;
+      if (!anchor) return;
+      if (anchor.target === '_blank') return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const href = anchor.getAttribute('href');
+      if (!href || href.startsWith('#')) return;
+
+      const nextUrl = new URL(anchor.href, window.location.href);
+      const sameDocument = nextUrl.href === window.location.href;
+      if (sameDocument) return;
+
+      const shouldLeave = window.confirm(warningMessage);
+      if (!shouldLeave) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('click', handleLinkNavigation, true);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('click', handleLinkNavigation, true);
+    };
+  }, [pendingPredictionIds.length]);
 
   useEffect(() => {
     if (!me) return;
@@ -579,10 +818,30 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
 
                 const currentPredHome = (predHome[m.id] ?? '').trim();
                 const currentPredAway = (predAway[m.id] ?? '').trim();
-                const savedPredHome = m.myPrediction ? String(m.myPrediction.predHome) : '';
-                const savedPredAway = m.myPrediction ? String(m.myPrediction.predAway) : '';
-                const predictionSaved = !!m.myPrediction && currentPredHome === savedPredHome && currentPredAway === savedPredAway;
-                const predictionDirty = currentPredHome !== savedPredHome || currentPredAway !== savedPredAway;
+                const savedPredHomeValue = (savedPredHome[m.id] ?? '').trim();
+                const savedPredAwayValue = (savedPredAway[m.id] ?? '').trim();
+                const predictionSaved =
+                  savedPredHomeValue !== ''
+                  && savedPredAwayValue !== ''
+                  && currentPredHome === savedPredHomeValue
+                  && currentPredAway === savedPredAwayValue;
+                const predictionDirty = pendingPredictionSet.has(m.id);
+                const hasSavedPrediction = savedPredHomeValue !== '' && savedPredAwayValue !== '';
+                const predictionStatusLabel = locked
+                  ? 'Cerrado'
+                  : predictionDirty
+                    ? 'Pendiente de guardar'
+                    : hasSavedPrediction
+                      ? 'Guardado'
+                      : 'Sin pronóstico';
+                const predictionStatusClass = locked
+                  ? 'closed'
+                  : predictionDirty
+                    ? 'pending'
+                    : hasSavedPrediction
+                      ? 'saved'
+                      : 'empty';
+                const predictionError = predictionSaveErrors[m.id];
 
                 const currentResultHome = (resultHome[m.id] ?? '').trim();
                 const currentResultAway = (resultAway[m.id] ?? '').trim();
@@ -629,48 +888,35 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                     </div>
 
                     <div className="qb-block">
-                      <div className="small">Pronóstico</div>
+                      <div className="qb-block-head">
+                        <div className="small">Pronóstico</div>
+                        <span className={`qb-badge ${predictionStatusClass}`}>{predictionStatusLabel}</span>
+                      </div>
                       <div className="row-actions">
                         <input
                           className={`input ${predictionSaved ? 'input-saved' : ''} ${predictionDirty ? 'input-dirty' : ''}`}
                           style={{ width: 72 }}
-                          disabled={locked}
+                          disabled={locked || savingPredictions || !!savingPredictionIds[m.id]}
                           value={predHome[m.id] ?? ''}
-                          onChange={(e) => setPredHome((s) => ({ ...s, [m.id]: e.target.value }))}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setPredHome((s) => ({ ...s, [m.id]: value }));
+                            clearPredictionErrors([m.id]);
+                          }}
                         />
                         <input
                           className={`input ${predictionSaved ? 'input-saved' : ''} ${predictionDirty ? 'input-dirty' : ''}`}
                           style={{ width: 72 }}
-                          disabled={locked}
+                          disabled={locked || savingPredictions || !!savingPredictionIds[m.id]}
                           value={predAway[m.id] ?? ''}
-                          onChange={(e) => setPredAway((s) => ({ ...s, [m.id]: e.target.value }))}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setPredAway((s) => ({ ...s, [m.id]: value }));
+                            clearPredictionErrors([m.id]);
+                          }}
                         />
                       </div>
-                      {predictionSaved && <div className="small saved-note">Pronóstico guardado</div>}
-                      {!predictionSaved && predictionDirty && <div className="small dirty-note">Cambios sin guardar</div>}
-                      <div className="row-actions qb-save-row" style={{ marginTop: 8 }}>
-                        <button
-                          className="btn primary"
-                          disabled={locked}
-                          onClick={async () => {
-                            setMsg(null);
-                            try {
-                              const ph = parseScoreInput(predHome[m.id] ?? '', 'Pronóstico local');
-                              const pa = parseScoreInput(predAway[m.id] ?? '', 'Pronóstico visitante');
-                              await apiFetch(`/leagues/${leagueId}/predictions`, {
-                                method: 'POST',
-                                body: JSON.stringify({ matchId: m.id, predHome: ph, predAway: pa }),
-                              });
-                              await load();
-                            } catch (e: any) {
-                              setMsg(e.message);
-                            }
-                          }}
-                        >
-                          Guardar pronóstico
-                        </button>
-                        {locked && <div className="small">Cerrado</div>}
-                      </div>
+                      {predictionError && <div className="small qb-inline-error">{predictionError}</div>}
                     </div>
 
                     <div className="qb-block">
@@ -727,6 +973,34 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
               })}
             </div>
           )}
+
+          {pendingPredictionIds.length > 0 && (
+            <div className="qb-pending-bar" role="status" aria-live="polite">
+              <div className="qb-pending-copy">
+                Tienes {pendingPredictionIds.length} pronóstico{pendingPredictionIds.length === 1 ? '' : 's'} pendiente{pendingPredictionIds.length === 1 ? '' : 's'} de guardar
+              </div>
+              <div className="qb-pending-actions">
+                <button
+                  className="btn"
+                  type="button"
+                  disabled={savingPredictions}
+                  onClick={discardPendingPredictions}
+                >
+                  Descartar cambios
+                </button>
+                <button
+                  className="btn primary"
+                  type="button"
+                  disabled={savingPredictions}
+                  onClick={saveAllPendingPredictions}
+                >
+                  {savingPredictions ? 'Guardando...' : 'Guardar todos'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {pendingPredictionIds.length > 0 && <div className="qb-pending-spacer" aria-hidden="true" />}
 
           <p className="small">Los puntos aparecen cuando el dueño de la quiniela carga resultados finales.</p>
         </section>

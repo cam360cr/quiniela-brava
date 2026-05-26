@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from './prisma.js';
-import { adminLeagueTeamSchema, bulkDeleteSchema, bulkDeleteTeamsSchema, createLeagueSchema, createMatchSchema, importMatchesCsvSchema, joinLeagueSchema, predictionSchema, setResultSchema } from './schemas.js';
+import { adminLeagueTeamSchema, bulkDeleteSchema, bulkDeleteTeamsSchema, bulkPredictionsSchema, createLeagueSchema, createMatchSchema, importMatchesCsvSchema, joinLeagueSchema, predictionSchema, setResultSchema } from './schemas.js';
 import { makeJoinCode } from './utils.js';
 import { calcPoints, CORRECT_WINNER_POINTS, EXACT_SCORE_POINTS } from './points.js';
 
@@ -269,6 +269,44 @@ function isSuperadmin(req: any) {
 function isCatalogFlagUrl(url: string | null | undefined) {
   if (!url) return false;
   return /^https:\/\/flagcdn\.com\/w\d+\//i.test(url.trim());
+}
+
+type UpsertPredictionInput = {
+  leagueId: string;
+  userId: string;
+  matchId: string;
+  predHome: number;
+  predAway: number;
+};
+
+type UpsertPredictionResult =
+  | { ok: true; prediction: any }
+  | { ok: false; status: number; code: 'MATCH_NOT_IN_LEAGUE' | 'PREDICTION_LOCKED'; error: string; matchId: string };
+
+async function upsertLeaguePrediction(input: UpsertPredictionInput): Promise<UpsertPredictionResult> {
+  const { leagueId, userId, matchId, predHome, predAway } = input;
+
+  const match = await prisma.match.findUnique({ where: { id: matchId } });
+  if (!match || match.leagueId !== leagueId) {
+    return { ok: false, status: 400, code: 'MATCH_NOT_IN_LEAGUE', error: 'Match not in league', matchId };
+  }
+
+  if (new Date() >= match.lockAt) {
+    return { ok: false, status: 400, code: 'PREDICTION_LOCKED', error: 'Predictions locked for this match', matchId };
+  }
+
+  const points =
+    match.finalHome !== null && match.finalAway !== null
+      ? calcPoints(predHome, predAway, match.finalHome, match.finalAway)
+      : null;
+
+  const prediction = await prisma.prediction.upsert({
+    where: { leagueId_userId_matchId: { leagueId, userId, matchId } },
+    update: { predHome, predAway, points },
+    create: { leagueId, userId, matchId, predHome, predAway, points },
+  });
+
+  return { ok: true, prediction };
 }
 
 export async function leagueRoutes(app: FastifyInstance) {
@@ -1219,32 +1257,80 @@ export async function leagueRoutes(app: FastifyInstance) {
 
     const { matchId, predHome, predAway } = parsed.data;
 
-    const match = await prisma.match.findUnique({ where: { id: matchId } });
-    if (!match || match.leagueId !== league.id) {
-      return reply.code(400).send({ error: 'Match not in league' });
-    }
-
-    if (new Date() >= match.lockAt) {
-      return reply.code(400).send({ error: 'Predictions locked for this match' });
-    }
-
-    const points =
-      match.finalHome !== null && match.finalAway !== null
-        ? calcPoints(
-            predHome,
-            predAway,
-            match.finalHome,
-            match.finalAway
-          )
-        : null;
-
-    const prediction = await prisma.prediction.upsert({
-      where: { leagueId_userId_matchId: { leagueId, userId: uid, matchId } },
-      update: { predHome, predAway, points },
-      create: { leagueId, userId: uid, matchId, predHome, predAway, points },
+    const result = await upsertLeaguePrediction({
+      leagueId: league.id,
+      userId: uid,
+      matchId,
+      predHome,
+      predAway,
     });
 
+    if (!result.ok) {
+      return reply.code(result.status).send({ error: result.error, code: result.code, matchId: result.matchId });
+    }
+
+    const prediction = result.prediction;
+
     return reply.send({ prediction });
+  });
+
+  // Guardar varios pronósticos de una sola vez
+  app.post('/leagues/:id/predictions/bulk', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const parsed = bulkPredictionsSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
+    const incomingPredictions = Array.isArray(parsed.data) ? parsed.data : parsed.data.predictions;
+
+    const uid = (req.user as any).uid as string;
+    const leagueId = (req.params as any).id as string;
+
+    const membership = await prisma.leagueMember.findUnique({
+      where: { leagueId_userId: { leagueId, userId: uid } },
+    });
+    if (!membership) return reply.code(403).send({ error: 'Not a member' });
+
+    const league = await prisma.league.findUnique({ where: { id: leagueId } });
+    if (!league) return reply.code(404).send({ error: 'League not found' });
+
+    // Keep last edit for repeated match IDs.
+    const byMatch = new Map<string, { matchId: string; predHome: number; predAway: number }>();
+    incomingPredictions.forEach((item) => {
+      byMatch.set(item.matchId, item);
+    });
+
+    const uniquePredictions = Array.from(byMatch.values());
+    const saved: any[] = [];
+    const failed: Array<{ matchId: string; error: string; code: string }> = [];
+
+    for (const item of uniquePredictions) {
+      const result = await upsertLeaguePrediction({
+        leagueId: league.id,
+        userId: uid,
+        matchId: item.matchId,
+        predHome: item.predHome,
+        predAway: item.predAway,
+      });
+
+      if (result.ok) {
+        saved.push(result.prediction);
+      } else {
+        failed.push({
+          matchId: result.matchId,
+          error: result.error,
+          code: result.code,
+        });
+      }
+    }
+
+    return reply.send({
+      summary: {
+        requested: incomingPredictions.length,
+        processed: uniquePredictions.length,
+        saved: saved.length,
+        failed: failed.length,
+      },
+      saved,
+      failed,
+    });
   });
 
   // Leaderboard por liga (sum points)
