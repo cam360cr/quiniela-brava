@@ -114,7 +114,7 @@ docker compose logs -f api web postgres
 
 ### URLs por defecto
 - Web: http://TU_IP_O_DOMINIO:8371
-- API health: http://TU_IP_O_DOMINIO:7432/health
+- API health: http://TU_IP_O_DOMINIO:6371/health
 
 Notas:
 - El contenedor `api` ejecuta `prisma migrate deploy` al iniciar, para aplicar migraciones pendientes.
