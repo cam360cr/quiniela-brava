@@ -6,9 +6,9 @@ export default function ReglamentoPage() {
     <>
       <Nav />
       <div className="card reglamento-shell">
-        <h1 style={{ marginTop: 0 }}>Reglamento - La Quiniela Mas Brava del Mundial</h1>
+        <h1 style={{ marginTop: 0 }}>Reglamento - La Quiniela Más Brava del Mundial</h1>
         <p className="small" style={{ marginTop: 0 }}>
-          Lee estas reglas antes de registrarte. La participacion implica aceptacion total del reglamento.
+          Lee estas reglas antes de registrarte. La participación implica aceptación total del reglamento.
         </p>
         <ReglamentoContent />
       </div>

@@ -31,7 +31,7 @@ export default function Nav() {
         aria-expanded={mobileOpen}
         onClick={() => setMobileOpen((prev) => !prev)}
       >
-        {mobileOpen ? 'Cerrar' : 'Menu'}
+        {mobileOpen ? 'Cerrar' : 'Menú'}
       </button>
 
       <div id="main-nav-links" className={`links ${mobileOpen ? 'open' : ''}`}>

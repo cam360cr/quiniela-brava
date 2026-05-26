@@ -37,8 +37,8 @@ export default function LeaderboardPage({ params }: { params: { id: string } }) 
       <>
         <Nav />
         <div className="card" style={{ maxWidth: 760, margin: '0 auto' }}>
-          <h2 style={{ marginTop: 0 }}>Inicia sesion para ver el ranking</h2>
-          <p className="small">La informacion de quinielas solo se muestra a usuarios con cuenta.</p>
+          <h2 style={{ marginTop: 0 }}>Inicia sesión para ver el ranking</h2>
+          <p className="small">La información de quinielas solo se muestra a usuarios con cuenta.</p>
           <div className="row-actions" style={{ marginTop: 12 }}>
             <Link className="btn primary" href="/login">Entrar</Link>
             <Link className="btn" href="/register">Crear cuenta</Link>

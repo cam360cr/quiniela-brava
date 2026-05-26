@@ -139,7 +139,7 @@ const ADMIN_NAV_ITEMS: Array<{ id: AdminNavItem; label: string }> = [
 function parseScoreInput(raw: string, label: string) {
   const value = raw.trim();
   if (value === '') throw new Error(`${label} es obligatorio`);
-  if (!/^\d+$/.test(value)) throw new Error(`${label} debe ser un numero entero`);
+  if (!/^\d+$/.test(value)) throw new Error(`${label} debe ser un número entero`);
 
   const n = Number(value);
   if (!Number.isInteger(n) || n < 0 || n > 99) {
@@ -380,7 +380,7 @@ export default function AdminPage() {
     if (resettingLeagueData) return;
 
     const confirmed = window.confirm(
-      'Esto borrara TODAS las quinielas, equipos, partidos, miembros y pronosticos. Los usuarios registrados se conservan. Deseas continuar?'
+      'Esto borrará TODAS las quinielas, equipos, partidos, miembros y pronósticos. Los usuarios registrados se conservan. ¿Deseas continuar?'
     );
     if (!confirmed) return;
 
@@ -474,7 +474,7 @@ export default function AdminPage() {
     setMsg(null);
     if (!leagueId) throw new Error('Selecciona una quiniela');
 
-    const confirmed = window.confirm(`Deseas eliminar realmente el equipo ${team.name}?`);
+    const confirmed = window.confirm(`¿Deseas eliminar realmente el equipo ${team.name}?`);
     if (!confirmed) return;
 
     await apiFetch(`/admin/teams/${team.id}`, { method: 'DELETE' });
@@ -497,10 +497,10 @@ export default function AdminPage() {
     const lockValue = editLockAt[match.id] ?? toDateTimeLocal(match.lockAt);
 
     if (!homeTeam || !awayTeam) throw new Error('Debes seleccionar ambos equipos');
-    if (!kickoffValue) throw new Error('Kickoff invalido');
-    if (!lockValue) throw new Error('Cierre invalido');
+    if (!kickoffValue) throw new Error('Kickoff inválido');
+    if (!lockValue) throw new Error('Cierre inválido');
 
-    const confirmed = window.confirm('Deseas cambiar realmente este partido?');
+    const confirmed = window.confirm('¿Deseas cambiar realmente este partido?');
     if (!confirmed) return;
 
     await apiFetch(`/leagues/${leagueId}/matches/${match.id}`, {
@@ -537,15 +537,15 @@ export default function AdminPage() {
 
     const kickoffDate = new Date(kickoffValue);
     if (Number.isNaN(kickoffDate.getTime())) {
-      throw new Error('Kickoff invalido');
+      throw new Error('Kickoff inválido');
     }
 
     const lockDate = lockValue ? new Date(lockValue) : null;
     if (lockDate && Number.isNaN(lockDate.getTime())) {
-      throw new Error('Cierre invalido');
+      throw new Error('Cierre inválido');
     }
     if (lockDate && lockDate > kickoffDate) {
-      throw new Error('El cierre no puede ser despues del kickoff');
+      throw new Error('El cierre no puede ser después del kickoff');
     }
 
     setMsg(null);
@@ -580,7 +580,7 @@ export default function AdminPage() {
   async function removeMatch(match: Match) {
     if (!leagueId) throw new Error('Selecciona una quiniela');
 
-    const confirmed = window.confirm(`Deseas eliminar realmente el partido ${match.homeTeam.name} vs ${match.awayTeam.name}?`);
+    const confirmed = window.confirm(`¿Deseas eliminar realmente el partido ${match.homeTeam.name} vs ${match.awayTeam.name}?`);
     if (!confirmed) return;
 
     await apiFetch(`/leagues/${leagueId}/matches/${match.id}`, {
@@ -595,7 +595,7 @@ export default function AdminPage() {
     if (!leagueId) throw new Error('Selecciona una quiniela');
 
     setMsg(null);
-    const confirmed = window.confirm('Deseas cambiar realmente este resultado?');
+    const confirmed = window.confirm('¿Deseas cambiar realmente este resultado?');
     if (!confirmed) return;
 
     const fallbackHome = match.finalHome === null ? '' : String(match.finalHome);
@@ -730,7 +730,7 @@ export default function AdminPage() {
         .join(' | ');
 
       let message =
-        `Importacion lista: ${response.summary.createdMatches} partidos nuevos, ` +
+        `Importación lista: ${response.summary.createdMatches} partidos nuevos, ` +
         `${response.summary.updatedMatches} actualizados, ` +
         `${response.summary.createdTeams} equipos nuevos.`;
 
@@ -753,7 +753,7 @@ export default function AdminPage() {
   async function bulkDeleteUsers() {
     if (bulkDeletingUsers || selectedUserIds.length === 0) return;
 
-    const confirmed = window.confirm(`Deseas eliminar ${selectedUserIds.length} usuarios seleccionados?`);
+    const confirmed = window.confirm(`¿Deseas eliminar ${selectedUserIds.length} usuarios seleccionados?`);
     if (!confirmed) return;
 
     setMsg(null);
@@ -793,7 +793,7 @@ export default function AdminPage() {
     if (bulkDeletingTeams || selectedTeamIds.length === 0) return;
     if (!leagueId) throw new Error('Selecciona una quiniela');
 
-    const confirmed = window.confirm(`Deseas eliminar ${selectedTeamIds.length} equipos seleccionados?`);
+    const confirmed = window.confirm(`¿Deseas eliminar ${selectedTeamIds.length} equipos seleccionados?`);
     if (!confirmed) return;
 
     setMsg(null);
@@ -840,7 +840,7 @@ export default function AdminPage() {
     if (bulkDeletingMatches || selectedMatchIds.length === 0) return;
     if (!leagueId) throw new Error('Selecciona una quiniela');
 
-    const confirmed = window.confirm(`Deseas eliminar ${selectedMatchIds.length} partidos seleccionados?`);
+    const confirmed = window.confirm(`¿Deseas eliminar ${selectedMatchIds.length} partidos seleccionados?`);
     if (!confirmed) return;
 
     setMsg(null);
@@ -1165,7 +1165,7 @@ export default function AdminPage() {
                   }}
                 />
               </th>
-              <th>Usuario</th><th>Rol</th><th>Quinielas</th><th>Pronosticos</th><th>Factura</th><th>Accion</th>
+              <th>Usuario</th><th>Rol</th><th>Quinielas</th><th>Pronósticos</th><th>Factura</th><th>Acción</th>
             </tr>
           </thead>
           <tbody>
@@ -1432,7 +1432,7 @@ export default function AdminPage() {
           {showCsvPanel && (
             <div className="admin-dashboard-csv-panel">
               <div className="small" style={{ marginBottom: 8 }}>
-                Importa por CSV. Columnas minimas: <b>homeTeam, awayTeam, kickoffAt</b>. Opcional: <b>lockAt, group, homeLogoUrl, awayLogoUrl</b>.
+                Importa por CSV. Columnas mínimas: <b>homeTeam, awayTeam, kickoffAt</b>. Opcional: <b>lockAt, group, homeLogoUrl, awayLogoUrl</b>.
               </div>
 
               <div className="admin-dashboard-csv-grid">
@@ -1778,7 +1778,7 @@ export default function AdminPage() {
 
   return (
     <div className={`admin-layout-shell ${mobileDrawerOpen ? 'drawer-open' : ''}`}>
-      {mobileDrawerOpen && <button className="admin-layout-backdrop" onClick={() => setMobileDrawerOpen(false)} aria-label="Cerrar menu" />}
+      {mobileDrawerOpen && <button className="admin-layout-backdrop" onClick={() => setMobileDrawerOpen(false)} aria-label="Cerrar menú" />}
 
       <aside className={`admin-layout-sidebar ${mobileDrawerOpen ? 'open' : ''}`}>
         <div className="admin-layout-brand">
@@ -1791,7 +1791,7 @@ export default function AdminPage() {
             {selectedLeague ? (
               <>
                 <div><b>{selectedLeague.name}</b></div>
-                <div>Codigo: {selectedLeague.joinCode}</div>
+                <div>Código: {selectedLeague.joinCode}</div>
                 <div>{selectedLeague._count.matches} partidos</div>
               </>
             ) : (
@@ -1823,13 +1823,13 @@ export default function AdminPage() {
 
         <Link className="admin-layout-home-link" href="/">Volver al inicio</Link>
 
-        <button className="admin-layout-logout" onClick={handleAdminLogout}>Cerrar sesion</button>
+        <button className="admin-layout-logout" onClick={handleAdminLogout}>Cerrar sesión</button>
       </aside>
 
       <div className="admin-layout-main">
         <div className="admin-layout-topbar">
           <button className="btn admin-layout-menu-btn" onClick={() => setMobileDrawerOpen((value) => !value)}>
-            {mobileDrawerOpen ? 'Cerrar' : 'Menu'}
+            {mobileDrawerOpen ? 'Cerrar' : 'Menú'}
           </button>
           <div>
             <h1 style={{ margin: 0 }}>
@@ -1843,12 +1843,12 @@ export default function AdminPage() {
             </h1>
             <p className="small" style={{ margin: 0 }}>
               {isSystemWorkspace
-                ? 'Gestion global de quinielas y usuarios del sistema.'
+                ? 'Gestión global de quinielas y usuarios del sistema.'
                 : isGroupsDashboardView
                 ? 'Vista por grupos para organizar los partidos de la quiniela.'
                 : showModernMatchesView
                   ? 'Administra los partidos, horarios y resultados de la quiniela.'
-                  : 'Gestion de quinielas, usuarios, equipos y partidos.'}
+                  : 'Gestión de quinielas, usuarios, equipos y partidos.'}
             </p>
           </div>
         </div>
@@ -1898,7 +1898,7 @@ export default function AdminPage() {
             <div><b>Nombre:</b> {selectedLeagueName}</div>
             {selectedLeague ? (
               <>
-                <div><b>Codigo:</b> {selectedLeague.joinCode}</div>
+                <div><b>Código:</b> {selectedLeague.joinCode}</div>
                 <div><b>Creador:</b> {selectedLeague.createdBy.fullName?.trim() || `@${selectedLeague.createdBy.username}`}</div>
                 <div><b>Miembros:</b> {selectedLeague._count.members}</div>
                 <div><b>Partidos:</b> {selectedLeague._count.matches}</div>
@@ -1921,8 +1921,8 @@ export default function AdminPage() {
                 <div className="label">Nombre</div>
                 <input className="input" value={newLeagueName} onChange={(e) => setNewLeagueName(e.target.value)} />
 
-                <div className="label">Descripcion</div>
-                <input className="input" value={newLeagueDescription} onChange={(e) => setNewLeagueDescription(e.target.value)} placeholder="Descripcion opcional" />
+                <div className="label">Descripción</div>
+                <input className="input" value={newLeagueDescription} onChange={(e) => setNewLeagueDescription(e.target.value)} placeholder="Descripción opcional" />
 
                 <div className="row-actions" style={{ marginTop: 12 }}>
                   <button className="btn primary admin-equal-btn" onClick={async () => {
@@ -1940,8 +1940,8 @@ export default function AdminPage() {
                 {selectedLeague ? (
                   <div className="small">
                     <div><b>Nombre:</b> {selectedLeague.name}</div>
-                    <div><b>Descripcion:</b> {selectedLeague.description || '-'}</div>
-                    <div><b>Pronosticos:</b> {selectedLeague._count.predictions}</div>
+                    <div><b>Descripción:</b> {selectedLeague.description || '-'}</div>
+                    <div><b>Pronósticos:</b> {selectedLeague._count.predictions}</div>
                   </div>
                 ) : (
                   <p className="small" style={{ margin: 0 }}>No hay quiniela seleccionada.</p>
@@ -1951,7 +1951,7 @@ export default function AdminPage() {
               <div className="card admin-quick-actions" style={{ marginTop: 0 }}>
                 <h3 style={{ marginTop: 0 }}>Limpiar base de quinielas</h3>
                 <p className="small" style={{ marginTop: 0 }}>
-                  Elimina todas las quinielas, equipos, partidos, miembros y pronosticos.
+                  Elimina todas las quinielas, equipos, partidos, miembros y pronósticos.
                   Los usuarios registrados se mantienen.
                 </p>
 
@@ -1977,17 +1977,17 @@ export default function AdminPage() {
           <div className="card">
             <h3 style={{ marginTop: 0 }}>Usuarios de la quiniela activa</h3>
             <p className="small" style={{ marginTop: 0 }}>
-              Aqui solo se muestran los miembros de la quiniela seleccionada.
+              Aquí solo se muestran los miembros de la quiniela seleccionada.
             </p>
 
             {!leagueId ? (
               <p className="small" style={{ margin: 0 }}>Selecciona una quiniela para ver sus miembros.</p>
             ) : !leagueMembers.length ? (
-              <p className="small" style={{ margin: 0 }}>Esta quiniela aun no tiene miembros.</p>
+              <p className="small" style={{ margin: 0 }}>Esta quiniela aún no tiene miembros.</p>
             ) : (
               <table className="table">
                 <thead>
-                  <tr><th>Usuario</th><th>Rol</th><th>Ingreso</th><th>Accion</th></tr>
+                  <tr><th>Usuario</th><th>Rol</th><th>Ingreso</th><th>Acción</th></tr>
                 </thead>
                 <tbody>
                   {leagueMembers.map((member) => (
@@ -2072,7 +2072,7 @@ export default function AdminPage() {
               )}
 
               <div style={{ marginTop: 12 }}>
-                <div className="small" style={{ marginBottom: 8 }}>Banderas por pais (buscable)</div>
+                <div className="small" style={{ marginBottom: 8 }}>Banderas por país (buscable)</div>
                 <input
                   className="input"
                   placeholder="Escribe al menos 2 letras. Ej: Argentina"
@@ -2136,7 +2136,7 @@ export default function AdminPage() {
                 )}
               </div>
               <p className="small" style={{ marginTop: 8 }}>
-                Si un equipo tiene partidos, primero borra esos partidos en la pestana Partidos y luego elimina el equipo.
+                Si un equipo tiene partidos, primero borra esos partidos en la pestaña Partidos y luego elimina el equipo.
               </p>
               {!teams.length ? (
                 <p className="small" style={{ margin: 0 }}>No hay equipos cargados para esta quiniela.</p>
@@ -2249,7 +2249,7 @@ export default function AdminPage() {
                                   )}
 
                                   <div style={{ marginTop: 12 }}>
-                                    <div className="small" style={{ marginBottom: 8 }}>Banderas por pais (buscable)</div>
+                                    <div className="small" style={{ marginBottom: 8 }}>Banderas por país (buscable)</div>
                                     <input
                                       className="input"
                                       placeholder="Escribe al menos 2 letras. Ej: Costa de Marfil"

@@ -41,15 +41,15 @@ export default function RegisterPage() {
       <div className="card register-shell">
         <h2 style={{ marginTop: 0, marginBottom: 8 }}>Crear cuenta para quinielas</h2>
         <p className="small register-subcopy">
-          Solo los usuarios registrados pueden participar en quinielas. El calendario Mundial 2026 es publico.
-          El correo electronico, usuario y numero de cedula deben ser unicos.
+          Solo los usuarios registrados pueden participar en quinielas. El calendario Mundial 2026 es público.
+          El correo electrónico, usuario y número de cédula deben ser únicos.
         </p>
 
         {msg && <div className="card register-msg">{msg}</div>}
 
         <div className="register-layout">
           <div className="card register-panel">
-            <h3 style={{ marginTop: 0, marginBottom: 6 }}>Pasos para habilitar tu participacion</h3>
+            <h3 style={{ marginTop: 0, marginBottom: 6 }}>Pasos para habilitar tu participación</h3>
             <p className="small" style={{ marginTop: 0, marginBottom: 0 }}>
               Completa estos pasos antes de crear tu cuenta.
             </p>
@@ -57,7 +57,7 @@ export default function RegisterPage() {
             <div className="register-step-list">
               <div className="register-step">
                 <div className="register-step-index">Paso 1</div>
-                <div className="register-step-title">Segui a Barra Brava en Instagram</div>
+                <div className="register-step-title">Seguí a Barra Brava en Instagram</div>
                 <div className="register-step-content">
                   <a
                     className="btn primary"
@@ -72,7 +72,7 @@ export default function RegisterPage() {
 
               <div className="register-step">
                 <div className="register-step-index">Paso 2</div>
-                <div className="register-step-title">Escribi tu usuario de Instagram</div>
+                <div className="register-step-title">Escribí tu usuario de Instagram</div>
                 <div className="register-step-content">
                   <input
                     className="input"
@@ -96,14 +96,14 @@ export default function RegisterPage() {
                       onChange={(e) => setFollowsInstagram(e.target.checked)}
                       style={{ marginTop: 2 }}
                     />
-                    Confirmo que ya sigo a @barrabravasportbar. Entiendo que si no sigo la cuenta, mi participacion puede ser anulada.
+                    Confirmo que ya sigo a @barrabravasportbar. Entiendo que si no sigo la cuenta, mi participación puede ser anulada.
                   </label>
                 </div>
               </div>
 
               <div className="register-step">
                 <div className="register-step-index">Paso 4</div>
-                <div className="register-step-title">Subi la factura de tu compra en Barra Brava</div>
+                <div className="register-step-title">Subí la factura de tu compra en Barra Brava</div>
                 <div className="register-step-content">
                   <p className="small" style={{ marginTop: 0, marginBottom: 8 }}>
                     Carga una foto clara de una factura real de compra hecha en Barra Brava.
@@ -119,7 +119,7 @@ export default function RegisterPage() {
 
                       try {
                         if (file.size > 4 * 1024 * 1024) {
-                          throw new Error('La imagen no puede pesar mas de 4 MB');
+                          throw new Error('La imagen no puede pesar más de 4 MB');
                         }
                         const dataUrl = await fileToDataUrl(file);
                         setPurchaseProofImage(dataUrl);
@@ -161,10 +161,10 @@ export default function RegisterPage() {
                       onChange={(e) => setAcceptedRules(e.target.checked)}
                       style={{ marginTop: 2 }}
                     />
-                    Confirmo que lei y acepto el reglamento de la quiniela.
+                    Confirmo que leí y acepto el reglamento de la quiniela.
                   </label>
                   <div className="small" style={{ marginTop: 8 }}>
-                    Tambien puedes verlo en una pagina dedicada: <Link href="/reglamento">Ver reglamento completo</Link>
+                    También puedes verlo en una página dedicada: <Link href="/reglamento">Ver reglamento completo</Link>
                   </div>
                 </div>
               </div>
@@ -179,7 +179,7 @@ export default function RegisterPage() {
 
             <div className="register-account-grid">
               <div>
-                <div className="label">Correo electronico</div>
+                <div className="label">Correo electrónico</div>
                 <input
                   className="input"
                   value={email}
@@ -190,7 +190,7 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <div className="label">Usuario unico</div>
+                <div className="label">Usuario único</div>
                 <input
                   className="input"
                   value={username}
@@ -203,7 +203,7 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <div className="label">Numero de cedula</div>
+                <div className="label">Número de cédula</div>
                 <input
                   className="input"
                   value={nationalId}
@@ -218,7 +218,7 @@ export default function RegisterPage() {
                   className="input"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Ej: Maria Fernanda Rojas"
+                  placeholder="Ej: María Fernanda Rojas"
                   autoComplete="name"
                 />
               </div>
@@ -235,13 +235,13 @@ export default function RegisterPage() {
             </div>
 
             <div className="register-account-full">
-              <div className="label">Contrasena</div>
+              <div className="label">Contraseña</div>
               <input
                 className="input"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 type="password"
-                placeholder="Minimo 6 caracteres"
+                placeholder="Mínimo 6 caracteres"
                 autoComplete="new-password"
               />
             </div>
@@ -260,14 +260,14 @@ export default function RegisterPage() {
 
                     if (!cleanUsername) throw new Error('Debes escribir un nombre de usuario');
                     if (!appUsernameRegex.test(cleanUsername)) {
-                      throw new Error('El nombre de usuario no es valido');
+                      throw new Error('El nombre de usuario no es válido');
                     }
                     if (cleanUsername.replace(/^@+/, '').length < 3) {
                       throw new Error('El nombre de usuario debe tener al menos 3 caracteres');
                     }
                     if (!cleanInstagramUsername) throw new Error('Debes escribir tu usuario de Instagram');
                     if (!instagramHandleRegex.test(cleanInstagramUsername)) {
-                      throw new Error('El usuario de Instagram no es valido');
+                      throw new Error('El usuario de Instagram no es válido');
                     }
                     if (!purchaseProofImage) throw new Error('Debes adjuntar la foto de la factura');
                     if (!followsInstagram) throw new Error('Debes confirmar que sigues el Instagram de Barra Brava');

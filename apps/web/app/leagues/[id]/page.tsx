@@ -45,7 +45,7 @@ const COSTA_RICA_TIMEZONE = 'America/Costa_Rica';
 function parseScoreInput(raw: string, label: string) {
   const value = raw.trim();
   if (value === '') throw new Error(`${label} es obligatorio`);
-  if (!/^\d+$/.test(value)) throw new Error(`${label} debe ser un numero entero`);
+  if (!/^\d+$/.test(value)) throw new Error(`${label} debe ser un número entero`);
 
   const n = Number(value);
   if (!Number.isInteger(n) || n < 0 || n > 99) {
@@ -162,7 +162,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
         .join(' | ');
 
       let message =
-        `Importacion lista: ${response.summary.createdMatches} partidos nuevos, ` +
+        `Importación lista: ${response.summary.createdMatches} partidos nuevos, ` +
         `${response.summary.updatedMatches} actualizados, ` +
         `${response.summary.createdTeams} equipos nuevos.`;
 
@@ -220,7 +220,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
     if (!me) return;
     if (!canManage) return;
     Promise.all([loadLeagueTeams(), loadTeamImages()]).catch((e: any) => {
-      setMsg(e?.message ?? 'No se pudieron cargar equipos o imagenes');
+      setMsg(e?.message ?? 'No se pudieron cargar equipos o imágenes');
     });
   }, [canManage, leagueId, me?.id]);
 
@@ -241,8 +241,8 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
       <>
         <Nav />
         <div className="card" style={{ maxWidth: 760, margin: '0 auto' }}>
-          <h2 style={{ marginTop: 0 }}>Inicia sesion para ver esta quiniela</h2>
-          <p className="small">El calendario es publico, pero las quinielas son solo para usuarios registrados.</p>
+          <h2 style={{ marginTop: 0 }}>Inicia sesión para ver esta quiniela</h2>
+          <p className="small">El calendario es público, pero las quinielas son solo para usuarios registrados.</p>
           <div className="row-actions" style={{ marginTop: 12 }}>
             <Link className="btn primary" href="/login">Entrar</Link>
             <Link className="btn" href="/register">Crear cuenta</Link>
@@ -260,7 +260,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
           <div>
             <h2 style={{ marginTop: 0, marginBottom: 6 }}>{league?.name || 'Quiniela'}</h2>
             {league?.description && <div className="small">{league.description}</div>}
-            <div className="small">Codigo para entrar: <b>{league?.joinCode}</b></div>
+            <div className="small">Código para entrar: <b>{league?.joinCode}</b></div>
           </div>
           <div className="row-actions">
             <Link className="btn" href={`/leagues/${leagueId}/leaderboard`}>Ver ranking</Link>
@@ -272,9 +272,9 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
 
         {canManage && me?.role === 'SUPERADMIN' && (
           <section className="card qb-admin-panel">
-            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Gestion centralizada</h3>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Gestión centralizada</h3>
             <p className="small" style={{ marginTop: 0 }}>
-              Para evitar duplicidad, la gestion de equipos, partidos y usuarios se unifico en el panel Admin global.
+              Para evitar duplicidad, la gestión de equipos, partidos y usuarios se unificó en el panel Admin global.
             </p>
             <div className="row-actions" style={{ marginTop: 10 }}>
               <Link className="btn primary" href="/admin">Abrir Admin global</Link>
@@ -288,7 +288,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
 
             <div className="card" style={{ marginTop: 10, padding: 12 }}>
               <h3 style={{ marginTop: 0, marginBottom: 8 }}>1) Agregar equipos</h3>
-              <p className="small" style={{ marginTop: 0 }}>Primero crea los equipos de esta quiniela y asignales bandera/logo.</p>
+              <p className="small" style={{ marginTop: 0 }}>Primero crea los equipos de esta quiniela y asígnales bandera/logo.</p>
 
               <div className="label">Nombre</div>
               <input className="input" value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="Ej: Costa Rica" />
@@ -340,10 +340,10 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
               )}
 
               <div style={{ marginTop: 12 }}>
-                <div className="small" style={{ marginBottom: 8 }}>Banderas por pais (buscable)</div>
+                <div className="small" style={{ marginBottom: 8 }}>Banderas por país (buscable)</div>
                 <input
                   className="input"
-                  placeholder="Buscar pais, ej: Argentina o Alemania"
+                  placeholder="Buscar país, ej: Argentina o Alemania"
                   value={flagSearch}
                   onChange={(e) => setFlagSearch(e.target.value)}
                 />
@@ -397,7 +397,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
             <div className="card" style={{ marginTop: 10, padding: 12 }}>
               <h3 style={{ marginTop: 0, marginBottom: 8 }}>Lista de equipos de esta quiniela</h3>
               {!leagueTeams.length ? (
-                <p className="small" style={{ margin: 0 }}>Todavia no hay equipos. Agrega al menos 2 para crear partidos.</p>
+                <p className="small" style={{ margin: 0 }}>Todavía no hay equipos. Agrega al menos 2 para crear partidos.</p>
               ) : (
                 <table className="table">
                   <thead>
@@ -451,7 +451,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
 
                       const home = leagueTeams.find((team) => team.id === homeTeamId);
                       const away = leagueTeams.find((team) => team.id === awayTeamId);
-                      if (!home || !away) throw new Error('Selecciona equipos validos');
+                      if (!home || !away) throw new Error('Selecciona equipos válidos');
 
                       await apiFetch(`/leagues/${leagueId}/matches`, {
                         method: 'POST',
@@ -487,7 +487,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
 
               <p className="small" style={{ marginTop: 0 }}>
                 Recomendado: usar fechas con zona, por ejemplo <b>2026-06-11T10:00:00-06:00</b>.
-                Si no envias zona horaria, se asumira hora de Costa Rica.
+                Si no envías zona horaria, se asumirá hora de Costa Rica.
               </p>
 
               <div className="row-actions" style={{ marginBottom: 8 }}>
@@ -561,15 +561,15 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
               </button>
             </div>
           </div>
-          <p className="small">Completa tus pronosticos antes del cierre de cada partido.</p>
+          <p className="small">Completa tus pronósticos antes del cierre de cada partido.</p>
 
           {matches.length === 0 ? (
-            <p className="small">Esta quiniela todavia no tiene partidos.</p>
+            <p className="small">Esta quiniela todavía no tiene partidos.</p>
           ) : visibleMatches.length === 0 ? (
             <p className="small">
               {matchesTab === 'open'
                 ? 'No hay partidos abiertos para pronosticar en este momento.'
-                : 'Todavia no hay partidos cerrados.'}
+                : 'Todavía no hay partidos cerrados.'}
             </p>
           ) : (
             <div className="qb-match-list">
@@ -625,11 +625,11 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
 
                     <div className="qb-meta">
                       <div><span className="small">Fecha y hora</span><b>{dateLabel(m.kickoffAt)} {timeLabel(m.kickoffAt)}</b></div>
-                      <div><span className="small">Cierre del pronostico</span><b>{sameCloseTime ? 'Misma fecha y hora del partido' : `${dateLabel(m.lockAt)} ${timeLabel(m.lockAt)}`}</b></div>
+                      <div><span className="small">Cierre del pronóstico</span><b>{sameCloseTime ? 'Misma fecha y hora del partido' : `${dateLabel(m.lockAt)} ${timeLabel(m.lockAt)}`}</b></div>
                     </div>
 
                     <div className="qb-block">
-                      <div className="small">Pronostico</div>
+                      <div className="small">Pronóstico</div>
                       <div className="row-actions">
                         <input
                           className={`input ${predictionSaved ? 'input-saved' : ''} ${predictionDirty ? 'input-dirty' : ''}`}
@@ -646,7 +646,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                           onChange={(e) => setPredAway((s) => ({ ...s, [m.id]: e.target.value }))}
                         />
                       </div>
-                      {predictionSaved && <div className="small saved-note">Pronostico guardado</div>}
+                      {predictionSaved && <div className="small saved-note">Pronóstico guardado</div>}
                       {!predictionSaved && predictionDirty && <div className="small dirty-note">Cambios sin guardar</div>}
                       <div className="row-actions qb-save-row" style={{ marginTop: 8 }}>
                         <button
@@ -655,8 +655,8 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                           onClick={async () => {
                             setMsg(null);
                             try {
-                              const ph = parseScoreInput(predHome[m.id] ?? '', 'Pronostico local');
-                              const pa = parseScoreInput(predAway[m.id] ?? '', 'Pronostico visitante');
+                              const ph = parseScoreInput(predHome[m.id] ?? '', 'Pronóstico local');
+                              const pa = parseScoreInput(predAway[m.id] ?? '', 'Pronóstico visitante');
                               await apiFetch(`/leagues/${leagueId}/predictions`, {
                                 method: 'POST',
                                 body: JSON.stringify({ matchId: m.id, predHome: ph, predAway: pa }),
@@ -667,7 +667,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                             }
                           }}
                         >
-                          Guardar pronostico
+                          Guardar pronóstico
                         </button>
                         {locked && <div className="small">Cerrado</div>}
                       </div>
@@ -728,7 +728,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
             </div>
           )}
 
-          <p className="small">Los puntos aparecen cuando el dueno de la quiniela carga resultados finales.</p>
+          <p className="small">Los puntos aparecen cuando el dueño de la quiniela carga resultados finales.</p>
         </section>
       </div>
     </>

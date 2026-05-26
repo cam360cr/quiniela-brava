@@ -30,7 +30,7 @@ export default function GlobalLeaderboardInfo() {
       <>
         <Nav />
         <div className="card" style={{ maxWidth: 760, margin: '0 auto' }}>
-          <h2 style={{ marginTop: 0 }}>Inicia sesion para ver rankings</h2>
+          <h2 style={{ marginTop: 0 }}>Inicia sesión para ver rankings</h2>
           <p className="small">Las quinielas y sus rankings son solo para usuarios registrados.</p>
           <div className="row-actions" style={{ marginTop: 12 }}>
             <Link className="btn primary" href="/login">Entrar</Link>

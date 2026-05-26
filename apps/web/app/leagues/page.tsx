@@ -68,12 +68,12 @@ export default function LeaguesPage() {
         <div className="card" style={{ maxWidth: 820, margin: '0 auto' }}>
           <h2 style={{ marginTop: 0 }}>Quinielas solo para usuarios registrados</h2>
           <p className="small">
-            Para participar, debes crear una cuenta e iniciar sesion. El calendario Mundial 2026 sigue disponible para todos.
+            Para participar, debes crear una cuenta e iniciar sesión. El calendario Mundial 2026 sigue disponible para todos.
           </p>
           <div className="row-actions" style={{ marginTop: 12 }}>
             <Link className="btn primary" href="/register">Crear cuenta</Link>
             <Link className="btn" href="/login">Entrar</Link>
-            <Link className="btn" href="/mundial-2026">Ver calendario publico</Link>
+            <Link className="btn" href="/mundial-2026">Ver calendario público</Link>
           </div>
         </div>
       </>
@@ -86,7 +86,7 @@ export default function LeaguesPage() {
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Zona de quinielas</h2>
         <p className="small" style={{ marginTop: 0 }}>
-          Aqui veras las quinielas donde ya participas y las que estan disponibles para unirte.
+          Aquí verás las quinielas donde ya participas y las que están disponibles para unirte.
         </p>
         {msg && <div className="card">{msg}</div>}
 
@@ -117,7 +117,7 @@ export default function LeaguesPage() {
         <div className="card">
           <h3 style={{ marginTop: 0 }}>Quinielas donde ya participo</h3>
           {joinedLeagues.length === 0 ? (
-            <p className="small">Todavia no te has unido a ninguna quiniela.</p>
+            <p className="small">Todavía no te has unido a ninguna quiniela.</p>
           ) : (
             <table className="table qb-leagues-table">
               <colgroup>
@@ -127,7 +127,7 @@ export default function LeaguesPage() {
                 <col className="qb-col-members" />
                 <col className="qb-col-action" />
               </colgroup>
-              <thead><tr><th>Quiniela</th><th>Descripcion</th><th>Codigo</th><th>Participantes</th><th></th></tr></thead>
+              <thead><tr><th>Quiniela</th><th>Descripción</th><th>Código</th><th>Participantes</th><th></th></tr></thead>
               <tbody>
                 {joinedLeagues.map((l) => (
                   <tr key={l.id}>
@@ -158,7 +158,7 @@ export default function LeaguesPage() {
                 <col className="qb-col-members" />
                 <col className="qb-col-action" />
               </colgroup>
-              <thead><tr><th>Quiniela</th><th>Descripcion</th><th>Codigo</th><th>Participantes</th><th></th></tr></thead>
+              <thead><tr><th>Quiniela</th><th>Descripción</th><th>Código</th><th>Participantes</th><th></th></tr></thead>
               <tbody>
                 {joinableLeagues.map((l) => (
                   <tr key={l.id}>
@@ -188,7 +188,7 @@ export default function LeaguesPage() {
           <div className="card">
             <h3 style={{ marginTop: 0 }}>Quinielas creadas por admin</h3>
             {leagues.length === 0 ? (
-              <p className="small">No has creado quinielas aun.</p>
+              <p className="small">No has creado quinielas aún.</p>
             ) : (
               <table className="table qb-leagues-table">
                 <colgroup>
@@ -198,7 +198,7 @@ export default function LeaguesPage() {
                   <col className="qb-col-members" />
                   <col className="qb-col-action" />
                 </colgroup>
-                <thead><tr><th>Quiniela</th><th>Descripcion</th><th>Codigo</th><th>Participantes</th><th></th></tr></thead>
+                <thead><tr><th>Quiniela</th><th>Descripción</th><th>Código</th><th>Participantes</th><th></th></tr></thead>
                 <tbody>
                   {leagues.map((l) => (
                     <tr key={l.id}>

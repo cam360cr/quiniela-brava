@@ -103,7 +103,7 @@ export default function AdminUserProfilePage({ params }: { params: { id: string 
         <div className="row-actions" style={{ justifyContent: 'space-between' }}>
           <h2 style={{ marginTop: 0, marginBottom: 0 }}>Perfil de usuario</h2>
           <div className="row-actions">
-            <Link className="btn" href="/admin">Volver admin</Link>
+            <Link className="btn" href="/admin">Volver al admin</Link>
           </div>
         </div>
 
@@ -119,10 +119,10 @@ export default function AdminUserProfilePage({ params }: { params: { id: string 
                 <div><b>Usuario:</b> {user.username}</div>
                 <div><b>Correo:</b> {user.email}</div>
                 <div><b>Nombre completo:</b> {user.fullName?.trim() || '-'}</div>
-                <div><b>Cedula:</b> {user.nationalId || '-'}</div>
+                <div><b>Cédula:</b> {user.nationalId || '-'}</div>
                 <div><b>Instagram:</b> {user.instagramUsername ? `@${user.instagramUsername}` : '-'}</div>
-                <div><b>Fecha nacimiento:</b> {formatDate(user.birthDate)}</div>
-                <div><b>Sigue Instagram:</b> {user.followsInstagram ? 'Si' : 'No'}</div>
+                <div><b>Fecha de nacimiento:</b> {formatDate(user.birthDate)}</div>
+                <div><b>Sigue Instagram:</b> {user.followsInstagram ? 'Sí' : 'No'}</div>
                 <div><b>Rol:</b> {user.role}</div>
                 <div><b>Registro:</b> {formatDate(user.createdAt)}</div>
               </div>
@@ -141,7 +141,7 @@ export default function AdminUserProfilePage({ params }: { params: { id: string 
               <div className="grid cols3">
                 <div><b>Quinielas unidas:</b> {user._count.leagues}</div>
                 <div><b>Quinielas creadas:</b> {user._count.createdLeagues}</div>
-                <div><b>Pronosticos:</b> {user._count.predictions}</div>
+                <div><b>Pronósticos:</b> {user._count.predictions}</div>
               </div>
             </div>
 
@@ -152,7 +152,7 @@ export default function AdminUserProfilePage({ params }: { params: { id: string 
               ) : (
                 <table className="table">
                   <thead>
-                    <tr><th>Quiniela</th><th>Codigo</th><th>Rol</th><th>Se unio</th><th></th></tr>
+                    <tr><th>Quiniela</th><th>Código</th><th>Rol</th><th>Se unió</th><th></th></tr>
                   </thead>
                   <tbody>
                     {user.leagues.map((membership) => (
@@ -176,7 +176,7 @@ export default function AdminUserProfilePage({ params }: { params: { id: string 
               ) : (
                 <table className="table">
                   <thead>
-                    <tr><th>Quiniela</th><th>Codigo</th><th>Creada</th><th></th></tr>
+                    <tr><th>Quiniela</th><th>Código</th><th>Creada</th><th></th></tr>
                   </thead>
                   <tbody>
                     {user.createdLeagues.map((league) => (

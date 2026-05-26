@@ -148,10 +148,10 @@ export default function Mundial2026Page() {
       <Nav />
 
       <section className="card wc-hero">
-        <p className="wc-kicker">Publico y compartible</p>
+        <p className="wc-kicker">Público y compartible</p>
         <h1 style={{ marginTop: 8, marginBottom: 10 }}>Calendario Mundial FIFA 2026</h1>
         <p className="small" style={{ maxWidth: 880 }}>
-          Seccion abierta para cualquiera con link. Incluye grupos oficiales A-L, selecciones participantes
+          Sección abierta para cualquiera con enlace. Incluye grupos oficiales A-L, selecciones participantes
           y calendario de fase de grupos para vivir el torneo como se debe.
         </p>
         <div className="wc-pill-row">
@@ -216,8 +216,8 @@ export default function Mundial2026Page() {
 
       <section className="card" style={{ borderStyle: 'dashed' }}>
         <p className="small" style={{ margin: 0 }}>
-          Fuente de datos: FIFA (equipos/grupos/fixtures) y consolidacion de calendario oficial del torneo.
-          Esta seccion es publica para compartir por link directo.
+          Fuente de datos: FIFA (equipos/grupos/fixtures) y consolidación de calendario oficial del torneo.
+          Esta sección es pública para compartir por enlace directo.
         </p>
       </section>
     </>

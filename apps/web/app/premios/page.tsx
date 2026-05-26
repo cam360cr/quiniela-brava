@@ -8,13 +8,13 @@ const prizes = [
   },
   {
     place: '2do lugar',
-    reward: 'Proximamente',
-    detail: 'Se publicara antes de iniciar la fase final del Mundial 2026.',
+    reward: 'Próximamente',
+    detail: 'Se publicará antes de iniciar la fase final del Mundial 2026.',
   },
   {
     place: '3er lugar',
-    reward: 'Proximamente',
-    detail: 'Se anunciara junto a las reglas oficiales del cierre de torneo.',
+    reward: 'Próximamente',
+    detail: 'Se anunciará junto a las reglas oficiales del cierre de torneo.',
   },
 ];
 
@@ -24,11 +24,11 @@ export default function PremiosPage() {
       <Nav />
 
       <section className="card landing-hero">
-        <p className="wc-kicker">Premiacion oficial</p>
+        <p className="wc-kicker">Premiación oficial</p>
         <h1 style={{ marginTop: 8, marginBottom: 10 }}>Premios del ranking de quiniela</h1>
         <p className="small" style={{ maxWidth: 880 }}>
-          Al finalizar el Mundial 2026, los primeros lugares del ranking global recibiran premios.
-          Esta pagina se ira actualizando con nuevos anuncios.
+          Al finalizar el Mundial 2026, los primeros lugares del ranking global recibirán premios.
+          Esta página se irá actualizando con nuevos anuncios.
         </p>
       </section>
 
