@@ -33,6 +33,18 @@ Copiá el archivo de ejemplo y ajustá `DATABASE_URL` a tu Postgres local:
 cp apps/api/.env.example apps/api/.env
 ```
 
+Para habilitar recuperacion de contrasena por correo, tambien define en `apps/api/.env`:
+
+```bash
+SMTP_HOST=mail.loshinchassportbar.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=quiniela@loshinchassportbar.com
+SMTP_PASS=tu_password_smtp
+SMTP_FROM="Quiniela Mundialista <quiniela@loshinchassportbar.com>"
+WEB_URL=http://TU_DOMINIO_O_IP:6371
+```
+
 ### WEB
 Copiá el ejemplo y apuntá al API:
 
@@ -85,12 +97,29 @@ npm run dev
 - API: http://localhost:7432
 - WEB: http://localhost:8371
 
+## 6.1) Recuperar contrasena
+La app incluye flujo de recuperacion por email:
+- Solicitar enlace: `POST /auth/password/forgot` (envia correo si la cuenta existe)
+- Restablecer contrasena: `POST /auth/password/reset`
+
+Pantallas web:
+- `/forgot-password`
+- `/reset-password?token=...`
+
 ## 7) Correr con Docker (VPS)
 
 Esta opcion levanta **Postgres + API + Web** con un solo comando.
 
 ### Variables importantes
 - `JWT_SECRET`: cambia este valor en produccion.
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` y `WEB_URL` se leen desde `apps/api/.env` en Docker.
+- Para recuperacion de contrasena en produccion, `WEB_URL` debe apuntar a tu URL publica (no `localhost`).
+
+Si no existe `apps/api/.env`, crealo antes de levantar Docker:
+
+```bash
+cp apps/api/.env.example apps/api/.env
+```
 
 En Linux/macOS:
 ```bash
@@ -136,7 +165,7 @@ npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
 - Al crear un equipo en quiniela, la foto es obligatoria (URL o subida de archivo desde el navegador).
 - Las fotos ya usadas pueden reutilizarse desde la biblioteca de imagenes dentro de Admin.
 - La seccion Finalistas fue retirada del flujo principal.
-- Premios: de momento el primer lugar del ranking final gana USD $1000.
+- Premios: 1er lugar $500 en efectivo; 2do al 5to lugar certificados de consumo.
 
 ---
 Si querés, luego se puede:

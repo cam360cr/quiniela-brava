@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import Nav from '../../components/Nav';
 import { login } from '../../lib/auth';
 import { useRouter } from 'next/navigation';
@@ -23,6 +24,10 @@ export default function LoginPage() {
 
         <div className="label">Contraseña</div>
         <input className="input" value={password} onChange={e=>setPassword(e.target.value)} type="password" placeholder="••••••" />
+
+        <div style={{ marginTop: 8 }}>
+          <Link href="/forgot-password" className="small">¿Olvidaste tu contraseña?</Link>
+        </div>
 
         <div style={{marginTop:12}} className="row-actions">
           <button className="btn primary" onClick={async ()=>{

@@ -2,19 +2,29 @@ import Nav from '../../components/Nav';
 
 const prizes = [
   {
-    place: '1er lugar',
-    reward: 'USD $500',
-    detail: 'Premio confirmado para el primer lugar del ranking final de la quiniela.',
+    place: '1er Lugar',
+    reward: '$500 en efectivo',
+    detail: 'Premio para el primer lugar del ranking final de la quiniela.',
   },
   {
-    place: '2do lugar',
-    reward: 'Próximamente',
-    detail: 'Se publicará antes de iniciar la fase final del Mundial 2026.',
+    place: '2do Lugar',
+    reward: 'Certificado de consumo $100',
+    detail: 'Válido en Barra Brava Los Yoses y Barra Brava Jacó.',
   },
   {
-    place: '3er lugar',
-    reward: 'Próximamente',
-    detail: 'Se anunciará junto a las reglas oficiales del cierre de torneo.',
+    place: '3er Lugar',
+    reward: 'Certificado de consumo $75',
+    detail: 'Válido en Barra Brava Los Yoses y Barra Brava Jacó.',
+  },
+  {
+    place: '4to Lugar',
+    reward: 'Certificado de consumo $50',
+    detail: 'Válido en Barra Brava Los Yoses y Barra Brava Jacó.',
+  },
+  {
+    place: '5to Lugar',
+    reward: 'Certificado de consumo $25',
+    detail: 'Válido en Barra Brava Los Yoses y Barra Brava Jacó.',
   },
 ];
 
@@ -27,8 +37,7 @@ export default function PremiosPage() {
         <p className="wc-kicker">Premiación oficial</p>
         <h1 style={{ marginTop: 8, marginBottom: 10 }}>Premios del ranking de quiniela</h1>
         <p className="small" style={{ maxWidth: 880 }}>
-          Al finalizar el Mundial 2026, los primeros lugares del ranking global recibirán premios.
-          Esta página se irá actualizando con nuevos anuncios.
+          Al finalizar el Mundial 2026, los primeros cinco lugares del ranking global recibirán estos premios.
         </p>
       </section>
 
@@ -44,7 +53,7 @@ export default function PremiosPage() {
 
       <section className="card" style={{ borderStyle: 'dashed' }}>
         <p className="small" style={{ margin: 0 }}>
-          Nota: de momento, el premio confirmado es el primer lugar con USD $500.
+          Nota: los certificados de consumo no son canjeables por efectivo.
         </p>
       </section>
     </>
