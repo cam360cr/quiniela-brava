@@ -172,3 +172,12 @@ Si querés, luego se puede:
 - Agregar ligas públicas y buscador
 - Notificaciones
 - Roles por liga (OWNER/ADMIN) con gestión desde el front
+
+
+
+## Docker
+
+cd /home/loshinchassportbar-quiniela/htdocs/quiniela.loshinchassportbar.com/quiniela-brava
+git pull
+docker compose down --remove-orphans
+docker compose up -d --build --force-recreate

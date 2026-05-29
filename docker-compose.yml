@@ -25,9 +25,6 @@ services:
       - ./apps/api/.env
     environment:
       PORT: 6371
-      JWT_SECRET: ${JWT_SECRET:-cambia_esto_en_produccion}
-      DATABASE_URL: postgresql://quiniela:quiniela@postgres:5432/quiniela?schema=public
-      WEB_URL: ${WEB_URL:-http://localhost:6371}
     depends_on:
       postgres:
         condition: service_healthy
