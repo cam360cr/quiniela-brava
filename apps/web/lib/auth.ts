@@ -34,6 +34,7 @@ type PasswordResetRequestResponse = {
     resetUrl?: string;
     mailSent?: boolean;
     messageId?: string;
+    smtpResponse?: string;
     error?: string;
   };
 };

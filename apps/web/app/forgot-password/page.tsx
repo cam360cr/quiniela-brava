@@ -9,8 +9,6 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [debugResetUrl, setDebugResetUrl] = useState<string | null>(null);
-  const [debugStatus, setDebugStatus] = useState<string | null>(null);
 
   return (
     <>
@@ -22,17 +20,6 @@ export default function ForgotPasswordPage() {
         </p>
 
         {msg && <div className="card" style={{ marginTop: 10 }}>{msg}</div>}
-
-        {debugStatus && (
-          <div className="card" style={{ marginTop: 10 }}>
-            <div className="small"><strong>Debug localhost:</strong> {debugStatus}</div>
-            {debugResetUrl && (
-              <div style={{ marginTop: 8 }}>
-                <a className="small" href={debugResetUrl}>Abrir enlace de recuperacion</a>
-              </div>
-            )}
-          </div>
-        )}
 
         <div className="label">Correo electronico</div>
         <input
@@ -50,36 +37,10 @@ export default function ForgotPasswordPage() {
             disabled={sending}
             onClick={async () => {
               setMsg(null);
-              setDebugResetUrl(null);
-              setDebugStatus(null);
               setSending(true);
               try {
                 const response = await requestPasswordReset(email);
                 setMsg(response.message || 'Si el correo existe, te enviamos instrucciones.');
-
-                if (response.debug) {
-                  if (typeof response.debug.userFound === 'boolean') {
-                    if (!response.debug.userFound) {
-                      setDebugStatus('No se encontro usuario con ese correo en la base de datos');
-                    }
-                  }
-
-                  if (response.debug.mailSent === true) {
-                    const id = response.debug.messageId ? ` (messageId: ${response.debug.messageId})` : '';
-                    const destination = response.debug.to ? ` a ${response.debug.to}` : '';
-                    setDebugStatus(`Correo enviado correctamente${destination}${id}`);
-                  } else if (response.debug.mailSent === false) {
-                    const reason = response.debug.error ? `: ${response.debug.error}` : '';
-                    const destination = response.debug.to ? ` a ${response.debug.to}` : '';
-                    if (response.debug.userFound !== false) {
-                      setDebugStatus(`Fallo al enviar correo${destination}${reason}`);
-                    }
-                  }
-
-                  if (response.debug.resetUrl) {
-                    setDebugResetUrl(response.debug.resetUrl);
-                  }
-                }
               } catch (error: any) {
                 setMsg(error?.message ?? 'No se pudo procesar la solicitud');
               } finally {

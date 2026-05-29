@@ -87,10 +87,10 @@ function dateLabel(value: string) {
 }
 
 function timeLabel(value: string) {
-  return new Date(value).toLocaleTimeString('es-CR', {
+  return new Date(value).toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
-    hour12: false,
+    hour12: true,
     timeZone: COSTA_RICA_TIMEZONE,
   });
 }
@@ -123,7 +123,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
   const [homeTeamId, setHomeTeamId] = useState('');
   const [awayTeamId, setAwayTeamId] = useState('');
   const [kickoffAt, setKickoffAt] = useState('');
-  const [matchesTab, setMatchesTab] = useState<'open' | 'closed'>('open');
+  const [matchesTab, setMatchesTab] = useState<'all' | 'without-prediction' | 'predicted' | 'closed'>('all');
   const [csvContent, setCsvContent] = useState('');
   const [csvFileName, setCsvFileName] = useState('');
   const [importingCsv, setImportingCsv] = useState(false);
@@ -239,8 +239,26 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
   const now = Date.now();
   const openMatches = matches.filter((m) => new Date(m.lockAt).getTime() > now);
   const closedMatches = matches.filter((m) => new Date(m.lockAt).getTime() <= now);
-  const visibleMatches = matchesTab === 'open' ? openMatches : closedMatches;
+  const openMatchesWithoutPrediction = openMatches.filter((m) => {
+    const savedHome = (savedPredHome[m.id] ?? '').trim();
+    const savedAway = (savedPredAway[m.id] ?? '').trim();
+    return savedHome === '' || savedAway === '';
+  });
+  const openMatchesWithPrediction = openMatches.filter((m) => {
+    const savedHome = (savedPredHome[m.id] ?? '').trim();
+    const savedAway = (savedPredAway[m.id] ?? '').trim();
+    return savedHome !== '' && savedAway !== '';
+  });
+  const visibleMatches =
+    matchesTab === 'all'
+      ? openMatches
+      : matchesTab === 'without-prediction'
+      ? openMatchesWithoutPrediction
+      : matchesTab === 'predicted'
+        ? openMatchesWithPrediction
+        : closedMatches;
   const matchById = useMemo(() => new Map(matches.map((match) => [match.id, match])), [matches]);
+  const msgIsSuccess = msg === 'Pronósticos guardados correctamente.' || msg?.startsWith('Se guardaron ');
 
   const pendingPredictionIds = useMemo(() => {
     return matches
@@ -507,7 +525,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
           </div>
         </section>
 
-        {msg && <div className="qb-alert">{msg}</div>}
+        {msg && <div className={`qb-alert ${msgIsSuccess ? 'qb-alert-success' : ''}`}>{msg}</div>}
 
         {canManage && me?.role === 'SUPERADMIN' && (
           <section className="card qb-admin-panel">
@@ -792,29 +810,40 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
           <div className="row-actions" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
             <h3 style={{ marginTop: 0, marginBottom: 0 }}>Mis partidos</h3>
             <div className="row-actions">
-              <button className={`btn ${matchesTab === 'open' ? 'primary' : ''}`} onClick={() => setMatchesTab('open')}>
-                Abiertos ({openMatches.length})
+              <button className={`btn ${matchesTab === 'all' ? 'primary' : ''}`} onClick={() => setMatchesTab('all')}>
+                Todos ({openMatches.length})
+              </button>
+              <button className={`btn ${matchesTab === 'without-prediction' ? 'primary' : ''}`} onClick={() => setMatchesTab('without-prediction')}>
+                Sin pronosticar ({openMatchesWithoutPrediction.length})
+              </button>
+              <button className={`btn ${matchesTab === 'predicted' ? 'primary' : ''}`} onClick={() => setMatchesTab('predicted')}>
+                Pronosticados ({openMatchesWithPrediction.length})
               </button>
               <button className={`btn ${matchesTab === 'closed' ? 'primary' : ''}`} onClick={() => setMatchesTab('closed')}>
                 Cerrados ({closedMatches.length})
               </button>
             </div>
           </div>
-          <p className="small">Completa tus pronósticos antes del cierre de cada partido.</p>
+          <p className="small">
+            Los pronósticos se cierran al iniciar cada partido. Revisa la <span className="qb-closed-tab-highlight">Pestaña Cerrados</span> para ver resultados.
+          </p>
 
           {matches.length === 0 ? (
             <p className="small">Esta quiniela todavía no tiene partidos.</p>
           ) : visibleMatches.length === 0 ? (
             <p className="small">
-              {matchesTab === 'open'
+              {matchesTab === 'all'
                 ? 'No hay partidos abiertos para pronosticar en este momento.'
-                : 'Todavía no hay partidos cerrados.'}
+                : matchesTab === 'without-prediction'
+                ? 'No hay partidos abiertos sin pronosticar en este momento.'
+                : matchesTab === 'predicted'
+                  ? 'Todavía no tienes partidos abiertos pronosticados.'
+                  : 'Todavía no hay partidos cerrados.'}
             </p>
           ) : (
             <div className="qb-match-list">
               {visibleMatches.map((m) => {
                 const locked = new Date(m.lockAt) <= new Date();
-                const sameCloseTime = new Date(m.lockAt).getTime() === new Date(m.kickoffAt).getTime();
 
                 const currentPredHome = (predHome[m.id] ?? '').trim();
                 const currentPredAway = (predAway[m.id] ?? '').trim();
@@ -884,7 +913,6 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
 
                     <div className="qb-meta">
                       <div><span className="small">Fecha y hora</span><b>{dateLabel(m.kickoffAt)} {timeLabel(m.kickoffAt)}</b></div>
-                      <div><span className="small">Cierre del pronóstico</span><b>{sameCloseTime ? 'Misma fecha y hora del partido' : `${dateLabel(m.lockAt)} ${timeLabel(m.lockAt)}`}</b></div>
                     </div>
 
                     <div className="qb-block">
@@ -892,7 +920,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                         <div className="small">Pronóstico</div>
                         <span className={`qb-badge ${predictionStatusClass}`}>{predictionStatusLabel}</span>
                       </div>
-                      <div className="row-actions">
+                      <div className="row-actions qb-prediction-inputs">
                         <input
                           className={`input ${predictionSaved ? 'input-saved' : ''} ${predictionDirty ? 'input-dirty' : ''}`}
                           style={{ width: 72 }}
@@ -981,7 +1009,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
               </div>
               <div className="qb-pending-actions">
                 <button
-                  className="btn"
+                  className="btn pending-discard"
                   type="button"
                   disabled={savingPredictions}
                   onClick={discardPendingPredictions}
@@ -989,7 +1017,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                   Descartar cambios
                 </button>
                 <button
-                  className="btn primary"
+                  className="btn pending-save"
                   type="button"
                   disabled={savingPredictions}
                   onClick={saveAllPendingPredictions}

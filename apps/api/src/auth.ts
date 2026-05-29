@@ -33,6 +33,10 @@ function buildPasswordResetUrl(rawToken: string) {
   return `${baseUrl}/reset-password?token=${encodeURIComponent(rawToken)}`;
 }
 
+function isLocalWebUrl(url: string) {
+  return /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(\/|$)/i.test(url);
+}
+
 export async function authRoutes(app: FastifyInstance) {
   app.post('/auth/register', async (req, reply) => {
     const parsed = registerSchema.safeParse(req.body);
@@ -226,6 +230,7 @@ export async function authRoutes(app: FastifyInstance) {
         resetUrl?: string;
         mailSent?: boolean;
         messageId?: string;
+        smtpResponse?: string;
         error?: string;
       };
     } = {
@@ -273,6 +278,7 @@ export async function authRoutes(app: FastifyInstance) {
     ]);
 
     const resetUrl = buildPasswordResetUrl(rawToken);
+    const localWebUrl = isLocalWebUrl(resetUrl);
 
     try {
       const sendResult = await sendPasswordResetEmail({
@@ -308,9 +314,19 @@ export async function authRoutes(app: FastifyInstance) {
             userId: user.id,
             email: user.email,
             messageId: sendResult.messageId,
+            smtpResponse: sendResult.response,
           },
           'Password reset email queued'
         );
+
+        if (localWebUrl) {
+          app.log.warn(
+            {
+              webUrl: process.env.WEB_URL,
+            },
+            'WEB_URL points to localhost. Email links only work on this machine and can hurt deliverability.'
+          );
+        }
 
         if (exposeDebugDetails) {
           genericResponse.debug = {
@@ -319,6 +335,8 @@ export async function authRoutes(app: FastifyInstance) {
             resetUrl,
             mailSent: true,
             messageId: sendResult.messageId,
+            smtpResponse: sendResult.response,
+            ...(localWebUrl ? { error: 'WEB_URL_IS_LOCALHOST' } : {}),
           };
         }
       }

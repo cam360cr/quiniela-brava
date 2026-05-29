@@ -1,3 +1,6 @@
+"use client";
+
+import { useMemo, useState } from 'react';
 import Nav from '../../components/Nav';
 import { flagCodeByTeam, toSpanishTeamName } from '../../lib/teamNames';
 
@@ -13,6 +16,123 @@ type Fixture = {
   stadium: string;
   city: string;
 };
+
+type CalendarView = 'day' | 'group';
+
+type FixtureWithMeta = Fixture & {
+  groupId: string;
+  kickoffEt: string;
+  kickoffCrDayKey: string;
+  kickoffCrDayLabel: string;
+  kickoffCrShortDateLabel: string;
+  kickoffCrTimeLabel: string;
+  kickoffUtcTimestamp: number;
+};
+
+type DayBucket = {
+  dayKey: string;
+  dayLabel: string;
+  fixtures: FixtureWithMeta[];
+  firstKickoffTimestamp: number;
+};
+
+const COSTA_RICA_TIMEZONE = 'America/Costa_Rica';
+const FIFA_EASTERN_TO_UTC_OFFSET_HOURS = 4;
+const MONTH_INDEX: Record<string, number> = {
+  Jan: 0,
+  Feb: 1,
+  Mar: 2,
+  Apr: 3,
+  May: 4,
+  Jun: 5,
+  Jul: 6,
+  Aug: 7,
+  Sep: 8,
+  Oct: 9,
+  Nov: 10,
+  Dec: 11,
+};
+
+const kickoffEasternByGroup: Record<string, string[]> = {
+  A: ['15:00', '22:00', '12:00', '21:00', '21:00', '21:00'],
+  B: ['15:00', '15:00', '15:00', '18:00', '15:00', '15:00'],
+  C: ['18:00', '21:00', '18:00', '21:00', '18:00', '18:00'],
+  D: ['21:00', '00:00', '15:00', '00:00', '22:00', '22:00'],
+  E: ['13:00', '19:00', '16:00', '22:00', '16:00', '16:00'],
+  F: ['16:00', '22:00', '13:00', '00:00', '19:00', '19:00'],
+  G: ['15:00', '21:00', '15:00', '21:00', '23:00', '23:00'],
+  H: ['12:00', '18:00', '12:00', '18:00', '20:00', '20:00'],
+  I: ['15:00', '18:00', '17:00', '20:00', '15:00', '15:00'],
+  J: ['21:00', '00:00', '13:00', '23:00', '22:00', '22:00'],
+  K: ['13:00', '22:00', '13:00', '22:00', '19:30', '19:30'],
+  L: ['16:00', '19:00', '16:00', '19:00', '17:00', '17:00'],
+};
+
+function toCostaRicaDateKey(date: Date) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: COSTA_RICA_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+
+  if (!year || !month || !day) {
+    throw new Error('No se pudo formatear fecha de Costa Rica');
+  }
+
+  return `${year}-${month}-${day}`;
+}
+
+function capitalizeText(value: string) {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function toCostaRicaKickoff(dateEt: string, timeEt: string) {
+  const [dayRaw, monthRaw, yearRaw] = dateEt.trim().split(/\s+/);
+  const [hourRaw, minuteRaw] = timeEt.trim().split(':');
+
+  const day = Number(dayRaw);
+  const year = Number(yearRaw);
+  const month = MONTH_INDEX[monthRaw];
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+
+  if (!Number.isInteger(day) || !Number.isInteger(year) || month === undefined || !Number.isInteger(hour) || !Number.isInteger(minute)) {
+    throw new Error(`Formato inválido de fecha/hora FIFA: ${dateEt} ${timeEt}`);
+  }
+
+  // FIFA publica estos horarios en hora del Este (UTC-4 en junio).
+  const kickoffUtc = new Date(Date.UTC(year, month, day, hour + FIFA_EASTERN_TO_UTC_OFFSET_HOURS, minute));
+
+  return {
+    dayKey: toCostaRicaDateKey(kickoffUtc),
+    dayLabel: capitalizeText(kickoffUtc.toLocaleDateString('es-CR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      timeZone: COSTA_RICA_TIMEZONE,
+    })),
+    shortDateLabel: kickoffUtc.toLocaleDateString('es-CR', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: COSTA_RICA_TIMEZONE,
+    }),
+    timeLabel: kickoffUtc.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: COSTA_RICA_TIMEZONE,
+    }),
+    utcTimestamp: kickoffUtc.getTime(),
+  };
+}
 
 function TeamName({ team }: { team: string }) {
   const code = flagCodeByTeam[team];
@@ -143,6 +263,62 @@ const fixturesByGroup: Record<string, Fixture[]> = {
 };
 
 export default function Mundial2026Page() {
+  const [calendarView, setCalendarView] = useState<CalendarView>('day');
+
+  const fixturesWithMeta = useMemo<FixtureWithMeta[]>(() => {
+    return groups
+      .flatMap((group) => {
+        const fixtures = fixturesByGroup[group.id] || [];
+        const kickoffEtList = kickoffEasternByGroup[group.id] || [];
+
+        return fixtures.map((fixture, index) => {
+          const kickoffEt = kickoffEtList[index] || '15:00';
+          const kickoffCr = toCostaRicaKickoff(fixture.date, kickoffEt);
+
+          return {
+            ...fixture,
+            groupId: group.id,
+            kickoffEt,
+            kickoffCrDayKey: kickoffCr.dayKey,
+            kickoffCrDayLabel: kickoffCr.dayLabel,
+            kickoffCrShortDateLabel: kickoffCr.shortDateLabel,
+            kickoffCrTimeLabel: kickoffCr.timeLabel,
+            kickoffUtcTimestamp: kickoffCr.utcTimestamp,
+          };
+        });
+      })
+      .sort((a, b) => a.kickoffUtcTimestamp - b.kickoffUtcTimestamp);
+  }, []);
+
+  const fixturesByDay = useMemo<DayBucket[]>(() => {
+    const buckets = new Map<string, DayBucket>();
+
+    fixturesWithMeta.forEach((fixture) => {
+      const existing = buckets.get(fixture.kickoffCrDayKey);
+      if (!existing) {
+        buckets.set(fixture.kickoffCrDayKey, {
+          dayKey: fixture.kickoffCrDayKey,
+          dayLabel: fixture.kickoffCrDayLabel,
+          fixtures: [fixture],
+          firstKickoffTimestamp: fixture.kickoffUtcTimestamp,
+        });
+        return;
+      }
+
+      existing.fixtures.push(fixture);
+      if (fixture.kickoffUtcTimestamp < existing.firstKickoffTimestamp) {
+        existing.firstKickoffTimestamp = fixture.kickoffUtcTimestamp;
+      }
+    });
+
+    return Array.from(buckets.values())
+      .map((bucket) => ({
+        ...bucket,
+        fixtures: bucket.fixtures.sort((a, b) => a.kickoffUtcTimestamp - b.kickoffUtcTimestamp),
+      }))
+      .sort((a, b) => a.firstKickoffTimestamp - b.firstKickoffTimestamp);
+  }, [fixturesWithMeta]);
+
   return (
     <>
       <Nav />
@@ -155,10 +331,13 @@ export default function Mundial2026Page() {
           y calendario de fase de grupos para vivir el torneo como se debe.
         </p>
         <div className="wc-pill-row">
-          <span className="wc-pill">Inicio: 11 Jun 2026</span>
-          <span className="wc-pill">Ronda de 32: 28 Jun - 3 Jul</span>
-          <span className="wc-pill">Final: 19 Jul 2026</span>
-          <span className="wc-pill">Sede final: MetLife Stadium</span>
+          <span className="wc-pill">Fase de grupos: 11 - 27 Jun</span>
+          <span className="wc-pill">Dieciseisavos (32): 28 Jun - 3 Jul</span>
+          <span className="wc-pill">Octavos: 4 - 7 Jul</span>
+          <span className="wc-pill">Cuartos: 9 - 11 Jul</span>
+          <span className="wc-pill">Semifinales: 14 - 15 Jul</span>
+          <span className="wc-pill">Tercer puesto: 18 Jul</span>
+          <span className="wc-pill">Final: 19 Jul (MetLife Stadium)</span>
         </div>
       </section>
 
@@ -189,29 +368,75 @@ export default function Mundial2026Page() {
       <section className="card">
         <div className="row-actions" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
           <h2 style={{ margin: 0 }}>Calendario fase de grupos</h2>
-          <span className="small">72 partidos</span>
+          <div className="wc-calendar-switch">
+            <button
+              className={`btn ${calendarView === 'day' ? 'primary' : ''}`}
+              type="button"
+              onClick={() => setCalendarView('day')}
+            >
+              Por día
+            </button>
+            <button
+              className={`btn ${calendarView === 'group' ? 'primary' : ''}`}
+              type="button"
+              onClick={() => setCalendarView('group')}
+            >
+              Por grupo
+            </button>
+          </div>
         </div>
+        <p className="small wc-fixture-note">
+          Horarios oficiales FIFA en hora del Este (ET) convertidos a hora de Costa Rica (UTC-6). Ejemplo: 3:00 PM ET = 1:00 PM CR.
+        </p>
 
-        <div className="wc-fixtures-wrap">
-          {groups.map((group) => (
-            <article key={`fx-${group.id}`} className="wc-fixture-group">
-              <h3 style={{ marginTop: 0 }}>Grupo {group.id}</h3>
-              <div className="wc-fixtures-list">
-                {fixturesByGroup[group.id].map((match, index) => (
-                  <div key={`${group.id}-${index}`} className="wc-fixture-item">
-                    <div className="wc-fixture-date">{match.date}</div>
-                    <div className="wc-fixture-match">
-                      <strong><TeamName team={match.home} /></strong>
-                      <span className="small">vs</span>
-                      <strong><TeamName team={match.away} /></strong>
+        {calendarView === 'day' ? (
+          <div className="wc-day-groups">
+            {fixturesByDay.map((bucket) => (
+              <article key={`day-${bucket.dayKey}`} className="wc-fixture-group">
+                <h3 style={{ marginTop: 0 }}>{bucket.dayLabel}</h3>
+                <div className="wc-fixtures-list">
+                  {bucket.fixtures.map((match, index) => (
+                    <div key={`${bucket.dayKey}-${match.groupId}-${index}`} className="wc-fixture-item">
+                      <div className="wc-fixture-date">{match.kickoffCrTimeLabel} CR · Grupo {match.groupId}</div>
+                      <div className="wc-fixture-match">
+                        <strong><TeamName team={match.home} /></strong>
+                        <span className="small">vs</span>
+                        <strong><TeamName team={match.away} /></strong>
+                      </div>
+                      <div className="small">{match.stadium} - {match.city}</div>
                     </div>
-                    <div className="small">{match.stadium} - {match.city}</div>
-                  </div>
-                ))}
-              </div>
-            </article>
-          ))}
-        </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="wc-fixtures-wrap">
+            {groups.map((group) => (
+              <article key={`fx-${group.id}`} className="wc-fixture-group">
+                <h3 style={{ marginTop: 0 }}>Grupo {group.id}</h3>
+                <div className="wc-fixtures-list">
+                  {fixturesByGroup[group.id].map((match, index) => {
+                    const kickoffEt = kickoffEasternByGroup[group.id]?.[index] || '15:00';
+                    const kickoffCR = toCostaRicaKickoff(match.date, kickoffEt);
+
+                    return (
+                      <div key={`${group.id}-${index}`} className="wc-fixture-item">
+                        <div className="wc-fixture-date">{kickoffCR.shortDateLabel} · {kickoffCR.timeLabel} CR</div>
+                        <div className="wc-fixture-match">
+                          <strong><TeamName team={match.home} /></strong>
+                          <span className="small">vs</span>
+                          <strong><TeamName team={match.away} /></strong>
+                        </div>
+                        <div className="small">{match.stadium} - {match.city}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="card" style={{ borderStyle: 'dashed' }}>

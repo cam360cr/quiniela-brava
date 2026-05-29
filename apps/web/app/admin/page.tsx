@@ -205,12 +205,17 @@ function formatDateHeading(value: string) {
 function formatMatchTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString('es-CR', {
+  const datePart = date.toLocaleDateString('es-CR', {
     day: '2-digit',
     month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
   });
+  const timePart = date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  return `${datePart} ${timePart}`;
 }
 
 function getMatchStatus(match: Match, override?: MatchStatus): MatchStatus {
@@ -257,6 +262,7 @@ export default function AdminPage() {
   const [editAwayTeam, setEditAwayTeam] = useState<Record<string, string>>({});
   const [editKickoffAt, setEditKickoffAt] = useState<Record<string, string>>({});
   const [editLockAt, setEditLockAt] = useState<Record<string, string>>({});
+  const [editLockAutoSync, setEditLockAutoSync] = useState<Record<string, boolean>>({});
 
   const [teams, setTeams] = useState<AdminTeam[]>([]);
   const [teamImages, setTeamImages] = useState<string[]>([]);
@@ -283,6 +289,7 @@ export default function AdminPage() {
   const [newMatchAwayTeam, setNewMatchAwayTeam] = useState('');
   const [newMatchKickoffAt, setNewMatchKickoffAt] = useState('');
   const [newMatchLockAt, setNewMatchLockAt] = useState('');
+  const [newMatchLockAutoSync, setNewMatchLockAutoSync] = useState(true);
   const [newMatchGroup, setNewMatchGroup] = useState('');
   const [creatingMatch, setCreatingMatch] = useState(false);
   const [showCsvPanel, setShowCsvPanel] = useState(false);
@@ -304,6 +311,36 @@ export default function AdminPage() {
 
   function toggleSelection(setter: (updater: (current: string[]) => string[]) => void, id: string) {
     setter((current) => (current.includes(id) ? current.filter((value) => value !== id) : [...current, id]));
+  }
+
+  function handleNewMatchKickoffChange(value: string) {
+    setNewMatchKickoffAt(value);
+    if (newMatchLockAutoSync || !newMatchLockAt.trim()) {
+      setNewMatchLockAt(value);
+    }
+  }
+
+  function handleNewMatchLockChange(value: string) {
+    setNewMatchLockAt(value);
+    setNewMatchLockAutoSync(value.trim() === '' || value === newMatchKickoffAt);
+  }
+
+  function handleEditKickoffChange(match: Match, value: string) {
+    setEditKickoffAt((current) => ({ ...current, [match.id]: value }));
+
+    const shouldSyncLock = editLockAutoSync[match.id] !== false;
+    if (shouldSyncLock) {
+      setEditLockAt((current) => ({ ...current, [match.id]: value }));
+    }
+  }
+
+  function handleEditLockChange(match: Match, value: string) {
+    setEditLockAt((current) => ({ ...current, [match.id]: value }));
+    const kickoffValue = editKickoffAt[match.id] ?? toDateTimeLocal(match.kickoffAt);
+    setEditLockAutoSync((current) => ({
+      ...current,
+      [match.id]: value.trim() === '' || value === kickoffValue,
+    }));
   }
 
   async function loadCore() {
@@ -569,6 +606,7 @@ export default function AdminPage() {
       setNewMatchAwayTeam('');
       setNewMatchKickoffAt('');
       setNewMatchLockAt('');
+      setNewMatchLockAutoSync(true);
       setNewMatchGroup('');
 
       setMsg('Partido creado.');
@@ -634,8 +672,23 @@ export default function AdminPage() {
   }
 
   function openMatchEditor(row: MatchRow) {
+    const kickoffValue = editKickoffAt[row.match.id] ?? toDateTimeLocal(row.match.kickoffAt);
+    const lockValue = editLockAt[row.match.id] ?? toDateTimeLocal(row.match.lockAt);
+
     setExpandedMatchId(row.match.id);
     setOpenMatchMenuId(null);
+    setEditKickoffAt((current) => ({
+      ...current,
+      [row.match.id]: current[row.match.id] ?? kickoffValue,
+    }));
+    setEditLockAt((current) => ({
+      ...current,
+      [row.match.id]: current[row.match.id] ?? lockValue,
+    }));
+    setEditLockAutoSync((current) => ({
+      ...current,
+      [row.match.id]: current[row.match.id] ?? lockValue === kickoffValue,
+    }));
     setEditMatchGroup((current) => ({
       ...current,
       [row.match.id]: current[row.match.id] ?? row.group,
@@ -914,6 +967,7 @@ export default function AdminPage() {
     setNewMatchAwayTeam('');
     setNewMatchKickoffAt('');
     setNewMatchLockAt('');
+    setNewMatchLockAutoSync(true);
     setNewMatchGroup('');
     setCreatingMatch(false);
     setCsvContent('');
@@ -929,6 +983,7 @@ export default function AdminPage() {
     setEditMatchGroup({});
     setEditMatchStatus({});
     setEditMatchNotes({});
+    setEditLockAutoSync({});
     resetTeamForm();
     resetTeamEditForm();
   }, [leagueId]);
@@ -1385,7 +1440,7 @@ export default function AdminPage() {
                   className="input"
                   type="datetime-local"
                   value={newMatchKickoffAt}
-                  onChange={(e) => setNewMatchKickoffAt(e.target.value)}
+                  onChange={(e) => handleNewMatchKickoffChange(e.target.value)}
                 />
               </div>
 
@@ -1395,7 +1450,7 @@ export default function AdminPage() {
                   className="input"
                   type="datetime-local"
                   value={newMatchLockAt}
-                  onChange={(e) => setNewMatchLockAt(e.target.value)}
+                  onChange={(e) => handleNewMatchLockChange(e.target.value)}
                 />
               </div>
 
@@ -1680,7 +1735,7 @@ export default function AdminPage() {
                                       className="input"
                                       type="datetime-local"
                                       value={editKickoffAt[row.match.id] ?? toDateTimeLocal(row.match.kickoffAt)}
-                                      onChange={(e) => setEditKickoffAt((current) => ({ ...current, [row.match.id]: e.target.value }))}
+                                      onChange={(e) => handleEditKickoffChange(row.match, e.target.value)}
                                     />
                                   </div>
 
@@ -1690,7 +1745,7 @@ export default function AdminPage() {
                                       className="input"
                                       type="datetime-local"
                                       value={editLockAt[row.match.id] ?? toDateTimeLocal(row.match.lockAt)}
-                                      onChange={(e) => setEditLockAt((current) => ({ ...current, [row.match.id]: e.target.value }))}
+                                      onChange={(e) => handleEditLockChange(row.match, e.target.value)}
                                     />
                                   </div>
 

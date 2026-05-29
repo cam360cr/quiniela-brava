@@ -19,6 +19,7 @@ type MailSendResult = {
   sent: boolean;
   reason?: 'missing-config';
   messageId?: string;
+  response?: string;
 };
 
 let cachedTransporter: nodemailer.Transporter | null = null;
@@ -81,34 +82,18 @@ export async function sendPasswordResetEmail(input: PasswordResetEmailInput): Pr
     return { sent: false, reason: 'missing-config' };
   }
 
-  const displayName = input.name?.trim() || 'usuario';
+  const displayName = input.name?.trim() || 'participante';
   const subject = 'Recuperacion de contrasena - Quiniela Mundialista';
   const text = [
     `Hola ${displayName},`,
     '',
     'Recibimos una solicitud para restablecer tu contrasena.',
-    'Puedes cambiarla usando este enlace:',
+    'Usa este enlace para cambiarla:',
     input.resetUrl,
     '',
     'Este enlace vence en 60 minutos.',
     'Si no solicitaste este cambio, ignora este correo.',
   ].join('\n');
-
-  const html = `
-    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111;">
-      <p>Hola ${displayName},</p>
-      <p>Recibimos una solicitud para restablecer tu contrasena.</p>
-      <p>
-        <a href="${input.resetUrl}" style="display:inline-block;padding:10px 14px;background:#ffd100;color:#111;text-decoration:none;border-radius:6px;font-weight:700;">
-          Cambiar contrasena
-        </a>
-      </p>
-      <p>O copia y pega este enlace en tu navegador:</p>
-      <p><a href="${input.resetUrl}">${input.resetUrl}</a></p>
-      <p>Este enlace vence en 60 minutos.</p>
-      <p>Si no solicitaste este cambio, ignora este correo.</p>
-    </div>
-  `;
 
   try {
     const transporter = getTransporter(config);
@@ -117,10 +102,13 @@ export async function sendPasswordResetEmail(input: PasswordResetEmailInput): Pr
       to: input.to,
       subject,
       text,
-      html,
     });
 
-    return { sent: true, messageId: info.messageId };
+    return {
+      sent: true,
+      messageId: info.messageId,
+      response: info.response,
+    };
   } catch (error) {
     cachedTransporter = null;
     cachedTransporterKey = null;

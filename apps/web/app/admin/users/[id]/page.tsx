@@ -49,13 +49,18 @@ function formatDate(value: string | null) {
   if (!value) return '-';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString('es-CR', {
+  const datePart = date.toLocaleDateString('es-CR', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
+  });
+  const timePart = date.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
+    hour12: true,
   });
+
+  return `${datePart} ${timePart}`;
 }
 
 export default function AdminUserProfilePage({ params }: { params: { id: string } }) {

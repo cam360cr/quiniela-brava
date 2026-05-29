@@ -131,11 +131,11 @@ export default function LeaguesPage() {
               <tbody>
                 {joinedLeagues.map((l) => (
                   <tr key={l.id}>
-                    <td>{l.name}</td>
-                    <td>{l.description || '-'}</td>
-                    <td className="qb-code-cell">{l.joinCode}</td>
-                    <td>{l._count.members}</td>
-                    <td>
+                    <td data-label="Quiniela">{l.name}</td>
+                    <td data-label="Descripción">{l.description || '-'}</td>
+                    <td data-label="Código" className="qb-code-cell">{l.joinCode}</td>
+                    <td data-label="Participantes">{l._count.members}</td>
+                    <td data-label="Acción">
                       <Link className="btn" href={`/leagues/${l.id}`}>Abrir</Link>
                     </td>
                   </tr>
@@ -162,11 +162,11 @@ export default function LeaguesPage() {
               <tbody>
                 {joinableLeagues.map((l) => (
                   <tr key={l.id}>
-                    <td>{l.name}</td>
-                    <td>{l.description || '-'}</td>
-                    <td className="qb-code-cell">{l.joinCode}</td>
-                    <td>{l._count.members}</td>
-                    <td>
+                    <td data-label="Quiniela">{l.name}</td>
+                    <td data-label="Descripción">{l.description || '-'}</td>
+                    <td data-label="Código" className="qb-code-cell">{l.joinCode}</td>
+                    <td data-label="Participantes">{l._count.members}</td>
+                    <td data-label="Acción">
                       <button className="btn" onClick={async () => {
                         setMsg(null);
                         try {
@@ -202,11 +202,11 @@ export default function LeaguesPage() {
                 <tbody>
                   {leagues.map((l) => (
                     <tr key={l.id}>
-                      <td>{l.name}</td>
-                      <td>{l.description || '-'}</td>
-                      <td className="qb-code-cell">{l.joinCode}</td>
-                      <td>{membersCountByLeagueId.get(l.id) ?? 0}</td>
-                      <td><Link className="btn" href={`/leagues/${l.id}`}>Abrir</Link></td>
+                      <td data-label="Quiniela">{l.name}</td>
+                      <td data-label="Descripción">{l.description || '-'}</td>
+                      <td data-label="Código" className="qb-code-cell">{l.joinCode}</td>
+                      <td data-label="Participantes">{membersCountByLeagueId.get(l.id) ?? 0}</td>
+                      <td data-label="Acción"><Link className="btn" href={`/leagues/${l.id}`}>Abrir</Link></td>
                     </tr>
                   ))}
                 </tbody>
