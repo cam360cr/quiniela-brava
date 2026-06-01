@@ -138,6 +138,7 @@ model League {
 
   pointsExact   Int @default(3)
   pointsOutcome Int @default(1)
+  deletedAt     DateTime?
 
   createdAt DateTime @default(now())
 

@@ -3,7 +3,7 @@ import crypto from 'crypto';
 export const DEFAULT_TEAMS = [
   { name: 'Costa Rica', code: 'CRC' },
   { name: 'Argentina', code: 'ARG' },
-  { name: 'Espana', code: 'ESP' },
+  { name: 'España', code: 'ESP' },
   { name: 'Brasil', code: 'BRA' },
 ];
 

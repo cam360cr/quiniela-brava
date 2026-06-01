@@ -20,7 +20,7 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  identifier: z.string().min(3), // email, username o cedula
+  identifier: z.string().min(3), // correo o cédula
   password: z.string().min(6).max(72),
 });
 

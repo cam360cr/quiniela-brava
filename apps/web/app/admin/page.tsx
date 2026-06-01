@@ -24,6 +24,7 @@ type AdminLeague = {
   name: string;
   description: string | null;
   joinCode: string;
+  deletedAt: string | null;
   createdBy: { username: string; email: string; fullName?: string | null };
   _count: { members: number; matches: number; predictions: number };
 };
@@ -73,18 +74,6 @@ type BulkDeleteResponse = {
   missingIds?: string[];
 };
 
-type ResetLeagueDataResponse = {
-  ok: boolean;
-  deleted: {
-    leagues: number;
-    teams: number;
-    matches: number;
-    predictions: number;
-    members: number;
-  };
-  usersPreserved: boolean;
-};
-
 type CsvImportResponse = {
   summary: {
     rowsReceived: number;
@@ -107,7 +96,7 @@ type MatchStatusFilter = 'all' | 'pendiente' | 'con-resultado' | 'cerrado';
 type MatchStatus = 'pendiente' | 'con-resultado' | 'cerrado';
 type AdminNavItem = 'panel' | 'partidos' | 'grupos' | 'equipos' | 'fases' | 'usuarios' | 'resultados';
 type AdminWorkspace = 'league' | 'system';
-type SystemPanelSection = 'sistema' | 'usuarios';
+type SystemPanelSection = 'sistema' | 'usuarios' | 'borradas';
 type MatchRow = {
   match: Match;
   order: number;
@@ -119,6 +108,11 @@ type MatchBucket = {
   id: string;
   title: string;
   rows: MatchRow[];
+};
+
+type LeagueActionModalState = {
+  league: AdminLeague;
+  mode: 'trash' | 'permanent-delete';
 };
 
 const MIN_FLAG_SEARCH_CHARS = 2;
@@ -244,6 +238,7 @@ export default function AdminPage() {
   const [activeAdminNav, setActiveAdminNav] = useState<AdminNavItem>('panel');
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [leagues, setLeagues] = useState<AdminLeague[]>([]);
+  const [deletedLeagues, setDeletedLeagues] = useState<AdminLeague[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [leagueId, setLeagueId] = useState(() => {
     if (typeof window === 'undefined') return '';
@@ -275,6 +270,9 @@ export default function AdminPage() {
   const [teamLogoUrl, setTeamLogoUrl] = useState('');
   const [showStoredTeamImages, setShowStoredTeamImages] = useState(false);
   const [invoicePreview, setInvoicePreview] = useState<{ src: string; userLabel: string } | null>(null);
+  const [leagueActionModal, setLeagueActionModal] = useState<LeagueActionModalState | null>(null);
+  const [leagueActionName, setLeagueActionName] = useState('');
+  const [leagueActionSubmitting, setLeagueActionSubmitting] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [selectedMatchIds, setSelectedMatchIds] = useState<string[]>([]);
@@ -302,7 +300,6 @@ export default function AdminPage() {
   const [csvContent, setCsvContent] = useState('');
   const [csvFileName, setCsvFileName] = useState('');
   const [importingCsv, setImportingCsv] = useState(false);
-  const [resettingLeagueData, setResettingLeagueData] = useState(false);
   const [showLeagueEditor, setShowLeagueEditor] = useState(false);
 
   function openInvoicePreview(src: string, userLabel: string) {
@@ -344,12 +341,14 @@ export default function AdminPage() {
   }
 
   async function loadCore() {
-    const [leagueResponse, userResponse] = await Promise.all([
+    const [leagueResponse, deletedLeagueResponse, userResponse] = await Promise.all([
       apiFetch<{ leagues: AdminLeague[] }>('/admin/leagues'),
+      apiFetch<{ leagues: AdminLeague[] }>('/admin/leagues/deleted'),
       apiFetch<{ users: AdminUser[] }>('/admin/users'),
     ]);
 
     setLeagues(leagueResponse.leagues);
+    setDeletedLeagues(deletedLeagueResponse.leagues);
     setUsers(userResponse.users);
     setLeagueId((current) => {
       const fallbackLeagueId = leagueResponse.leagues[0]?.id || '';
@@ -363,6 +362,75 @@ export default function AdminPage() {
       const exists = leagueResponse.leagues.some((league) => league.id === preferredLeagueId);
       return exists ? preferredLeagueId : fallbackLeagueId;
     });
+  }
+
+  function openLeagueActionModal(league: AdminLeague, mode: LeagueActionModalState['mode']) {
+    setLeagueActionModal({ league, mode });
+    setLeagueActionName('');
+  }
+
+  function closeLeagueActionModal() {
+    if (leagueActionSubmitting) return;
+    setLeagueActionModal(null);
+    setLeagueActionName('');
+  }
+
+  async function submitLeagueAction() {
+    if (!leagueActionModal || leagueActionSubmitting) return;
+
+    const { league, mode } = leagueActionModal;
+    if (leagueActionName.trim() !== league.name.trim()) {
+      setMsg('El nombre no coincide. Operación cancelada.');
+      return;
+    }
+
+    setLeagueActionSubmitting(true);
+
+    try {
+      if (mode === 'trash') {
+        await apiFetch(`/admin/leagues/${league.id}/trash`, {
+          method: 'POST',
+          body: JSON.stringify({ name: league.name }),
+        });
+
+        await loadCore();
+        setMsg(`Quiniela movida a borradas: ${league.name}`);
+      } else {
+        await apiFetch(`/admin/leagues/${league.id}/permanent-delete`, {
+          method: 'POST',
+          body: JSON.stringify({ name: league.name }),
+        });
+
+        await loadCore();
+        setMsg(`Quiniela eliminada definitivamente: ${league.name}`);
+      }
+
+      setLeagueActionModal(null);
+      setLeagueActionName('');
+    } finally {
+      setLeagueActionSubmitting(false);
+    }
+  }
+
+  async function trashLeague(league: AdminLeague) {
+    openLeagueActionModal(league, 'trash');
+  }
+
+  async function restoreLeague(league: AdminLeague) {
+    const confirmed = window.confirm(`¿Deseas restaurar la quiniela ${league.name}?`);
+    if (!confirmed) return;
+
+    await apiFetch(`/admin/leagues/${league.id}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+
+    await loadCore();
+    setMsg(`Quiniela restaurada: ${league.name}`);
+  }
+
+  async function deleteLeaguePermanently(league: AdminLeague) {
+    openLeagueActionModal(league, 'permanent-delete');
   }
 
   async function loadMatches(currentLeagueId: string) {
@@ -411,43 +479,6 @@ export default function AdminPage() {
 
     await loadCore();
     setMsg('Quiniela creada correctamente.');
-  }
-
-  async function resetLeagueData() {
-    if (resettingLeagueData) return;
-
-    const confirmed = window.confirm(
-      'Esto borrará TODAS las quinielas, equipos, partidos, miembros y pronósticos. Los usuarios registrados se conservan. ¿Deseas continuar?'
-    );
-    if (!confirmed) return;
-
-    setMsg(null);
-    setResettingLeagueData(true);
-
-    try {
-      const response = await apiFetch<ResetLeagueDataResponse>('/admin/reset-league-data', {
-        method: 'POST',
-        body: JSON.stringify({}),
-      });
-
-      await loadCore();
-      setLeagueMembers([]);
-      setMatches([]);
-      setTeams([]);
-      setTeamImages([]);
-      setSelectedTeamIds([]);
-      setSelectedMatchIds([]);
-      resetTeamForm();
-      resetTeamEditForm();
-
-      setMsg(
-        `Limpieza completada: ${response.deleted.leagues} quinielas, ${response.deleted.teams} equipos y ${response.deleted.matches} partidos eliminados. Usuarios conservados.`
-      );
-    } catch (e: any) {
-      setMsg(e?.message ?? 'No se pudo limpiar la base de quinielas');
-    } finally {
-      setResettingLeagueData(false);
-    }
   }
 
   function resetTeamForm() {
@@ -511,7 +542,7 @@ export default function AdminPage() {
     setMsg(null);
     if (!leagueId) throw new Error('Selecciona una quiniela');
 
-    const confirmed = window.confirm(`¿Deseas eliminar realmente el equipo ${team.name}?`);
+    const confirmed = window.confirm(`¿Deseas eliminar realmente el equipo ${toSpanishTeamName(team.name)}?`);
     if (!confirmed) return;
 
     await apiFetch(`/admin/teams/${team.id}`, { method: 'DELETE' });
@@ -618,7 +649,7 @@ export default function AdminPage() {
   async function removeMatch(match: Match) {
     if (!leagueId) throw new Error('Selecciona una quiniela');
 
-    const confirmed = window.confirm(`¿Deseas eliminar realmente el partido ${match.homeTeam.name} vs ${match.awayTeam.name}?`);
+    const confirmed = window.confirm(`¿Deseas eliminar realmente el partido ${toSpanishTeamName(match.homeTeam.name)} vs ${toSpanishTeamName(match.awayTeam.name)}?`);
     if (!confirmed) return;
 
     await apiFetch(`/leagues/${leagueId}/matches/${match.id}`, {
@@ -1123,7 +1154,7 @@ export default function AdminPage() {
 
     return matchRows.filter((row) => {
       if (teamQuery) {
-        const haystack = normalizeSearchText(`${row.match.homeTeam.name} ${row.match.awayTeam.name}`);
+        const haystack = normalizeSearchText(`${row.match.homeTeam.name} ${toSpanishTeamName(row.match.homeTeam.name)} ${row.match.awayTeam.name} ${toSpanishTeamName(row.match.awayTeam.name)}`);
         if (!haystack.includes(teamQuery)) return false;
       }
 
@@ -1940,6 +1971,15 @@ export default function AdminPage() {
             >
               Usuarios sistema
             </button>
+            <button
+              className={`btn admin-subtab-btn ${systemPanelSection === 'borradas' ? 'primary' : ''}`}
+              onClick={() => {
+                setSystemPanelSection('borradas');
+                openSystemPanel('borradas');
+              }}
+            >
+              Borradas
+            </button>
           </div>
         </div>
 
@@ -2003,23 +2043,51 @@ export default function AdminPage() {
                 )}
               </div>
 
-              <div className="card admin-quick-actions" style={{ marginTop: 0 }}>
-                <h3 style={{ marginTop: 0 }}>Limpiar base de quinielas</h3>
-                <p className="small" style={{ marginTop: 0 }}>
-                  Elimina todas las quinielas, equipos, partidos, miembros y pronósticos.
-                  Los usuarios registrados se mantienen.
-                </p>
-
-                <div className="row-actions" style={{ marginTop: 12 }}>
-                  <button
-                    className="btn"
-                    style={{ width: '100%' }}
-                    disabled={resettingLeagueData}
-                    onClick={resetLeagueData}
-                  >
-                    {resettingLeagueData ? 'Limpiando...' : 'Borrar datos de quinielas'}
-                  </button>
-                </div>
+              <div className="card" style={{ marginTop: 0 }}>
+                <h3 style={{ marginTop: 0 }}>Quinielas activas</h3>
+                {!leagues.length ? (
+                  <p className="small" style={{ margin: 0 }}>No hay quinielas activas.</p>
+                ) : (
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Quiniela</th>
+                        <th>Miembros</th>
+                        <th>Partidos</th>
+                        <th>Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leagues.map((league) => (
+                        <tr key={league.id}>
+                          <td>
+                            <b>{league.name}</b>
+                            <br />
+                            <span className="small">Código: {league.joinCode}</span>
+                          </td>
+                          <td>{league._count.members}</td>
+                          <td>{league._count.matches}</td>
+                          <td>
+                            <div className="row-actions admin-table-actions">
+                              <button
+                                className="btn admin-equal-btn"
+                                onClick={async () => {
+                                  try {
+                                    await trashLeague(league);
+                                  } catch (e: any) {
+                                    setMsg(e?.message ?? 'No se pudo mover a borradas');
+                                  }
+                                }}
+                              >
+                                Borrar
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
 
             </div>
@@ -2027,6 +2095,73 @@ export default function AdminPage() {
         )}
 
         {isSystemWorkspace && systemPanelSection === 'usuarios' && renderSystemUsersCard()}
+
+        {isSystemWorkspace && systemPanelSection === 'borradas' && (
+          <div className="card">
+            <h3 style={{ marginTop: 0 }}>Quinielas borradas</h3>
+            <p className="small" style={{ marginTop: 0 }}>
+              Estas quinielas siguen guardadas hasta que las borres definitivamente.
+            </p>
+
+            {!deletedLeagues.length ? (
+              <p className="small" style={{ margin: 0 }}>No hay quinielas borradas.</p>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Quiniela</th>
+                    <th>Borrada</th>
+                    <th>Miembros</th>
+                    <th>Partidos</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deletedLeagues.map((league) => (
+                    <tr key={league.id}>
+                      <td>
+                        <b>{league.name}</b>
+                        <br />
+                        <span className="small">Código: {league.joinCode}</span>
+                      </td>
+                      <td className="small">{formatDate(league.deletedAt)}</td>
+                      <td>{league._count.members}</td>
+                      <td>{league._count.matches}</td>
+                      <td>
+                        <div className="row-actions admin-table-actions">
+                          <button
+                            className="btn admin-equal-btn"
+                            onClick={async () => {
+                              try {
+                                await restoreLeague(league);
+                              } catch (e: any) {
+                                setMsg(e?.message ?? 'No se pudo restaurar la quiniela');
+                              }
+                            }}
+                          >
+                            Restaurar
+                          </button>
+                          <button
+                            className="btn"
+                            onClick={async () => {
+                              try {
+                                await deleteLeaguePermanently(league);
+                              } catch (e: any) {
+                                setMsg(e?.message ?? 'No se pudo borrar definitivamente');
+                              }
+                            }}
+                          >
+                            Borrar definitivamente
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
 
         {showLeagueEditor && quinielaSection === 'miembros' && (
           <div className="card">
@@ -2381,6 +2516,53 @@ export default function AdminPage() {
 
               <div className="row-actions" style={{ marginTop: 12 }}>
                 <a className="btn" href={invoicePreview.src} download={`factura-${invoicePreview.userLabel}.jpg`}>Descargar</a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {leagueActionModal && (
+          <div className="admin-proof-modal-backdrop" onClick={closeLeagueActionModal}>
+            <div className="card admin-proof-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="row-actions" style={{ justifyContent: 'space-between' }}>
+                <h3 style={{ margin: 0 }}>
+                  {leagueActionModal.mode === 'trash' ? 'Mover quiniela a borradas' : 'Borrar quiniela definitivamente'}
+                </h3>
+                <button className="btn" onClick={closeLeagueActionModal} disabled={leagueActionSubmitting}>Cerrar</button>
+              </div>
+
+              <p className="small" style={{ marginTop: 12 }}>
+                Escribe exactamente el nombre de la quiniela para continuar: <b>{leagueActionModal.league.name}</b>
+              </p>
+
+              <div className="label">Nombre de la quiniela</div>
+              <input
+                className="input"
+                value={leagueActionName}
+                onChange={(e) => setLeagueActionName(e.target.value)}
+                placeholder={leagueActionModal.league.name}
+                autoFocus
+              />
+
+              <div className="row-actions" style={{ marginTop: 12 }}>
+                <button className="btn" onClick={closeLeagueActionModal} disabled={leagueActionSubmitting}>Cancelar</button>
+                <button
+                  className="btn primary"
+                  onClick={async () => {
+                    try {
+                      await submitLeagueAction();
+                    } catch (e: any) {
+                      setMsg(e?.message ?? 'No se pudo completar la acción sobre la quiniela');
+                    }
+                  }}
+                  disabled={leagueActionSubmitting || leagueActionName.trim() !== leagueActionModal.league.name.trim()}
+                >
+                  {leagueActionSubmitting
+                    ? 'Procesando...'
+                    : leagueActionModal.mode === 'trash'
+                      ? 'Mover a borradas'
+                      : 'Borrar definitivamente'}
+                </button>
               </div>
             </div>
           </div>

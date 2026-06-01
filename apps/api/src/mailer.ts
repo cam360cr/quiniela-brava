@@ -83,11 +83,11 @@ export async function sendPasswordResetEmail(input: PasswordResetEmailInput): Pr
   }
 
   const displayName = input.name?.trim() || 'participante';
-  const subject = 'Recuperacion de contrasena - Quiniela Mundialista';
+  const subject = 'Recuperación de contraseña - Quiniela Mundialista';
   const text = [
     `Hola ${displayName},`,
     '',
-    'Recibimos una solicitud para restablecer tu contrasena.',
+    'Recibimos una solicitud para restablecer tu contraseña.',
     'Usa este enlace para cambiarla:',
     input.resetUrl,
     '',

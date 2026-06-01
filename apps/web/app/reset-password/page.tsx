@@ -26,12 +26,12 @@ export default function ResetPasswordPage() {
     <>
       <Nav />
       <div className="card" style={{ maxWidth: 560, margin: '0 auto' }}>
-        <h2 style={{ marginTop: 0 }}>Cambiar contrasena</h2>
+        <h2 style={{ marginTop: 0 }}>Cambiar contraseña</h2>
 
         {tokenMissing ? (
           <>
             <p className="small" style={{ marginTop: 0 }}>
-              El enlace de recuperacion no es valido. Solicita uno nuevo.
+              El enlace de recuperación no es válido. Solicita uno nuevo.
             </p>
             <div className="row-actions" style={{ marginTop: 12 }}>
               <Link className="btn primary" href="/forgot-password">Solicitar nuevo enlace</Link>
@@ -41,28 +41,28 @@ export default function ResetPasswordPage() {
         ) : (
           <>
             <p className="small" style={{ marginTop: 0 }}>
-              Ingresa tu nueva contrasena. El enlace es valido por tiempo limitado.
+              Ingresa tu nueva contraseña. El enlace es válido por tiempo limitado.
             </p>
 
             {msg && <div className="card" style={{ marginTop: 10 }}>{msg}</div>}
 
-            <div className="label">Nueva contrasena</div>
+            <div className="label">Nueva contraseña</div>
             <input
               className="input"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Minimo 6 caracteres"
+              placeholder="Mínimo 6 caracteres"
               autoComplete="new-password"
             />
 
-            <div className="label">Confirmar contrasena</div>
+            <div className="label">Confirmar contraseña</div>
             <input
               className="input"
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Repite tu contrasena"
+              placeholder="Repite tu contraseña"
               autoComplete="new-password"
             />
 
@@ -74,28 +74,28 @@ export default function ResetPasswordPage() {
                   setMsg(null);
 
                   if (password.length < 6) {
-                    setMsg('La contrasena debe tener al menos 6 caracteres.');
+                    setMsg('La contraseña debe tener al menos 6 caracteres.');
                     return;
                   }
 
                   if (password !== confirmPassword) {
-                    setMsg('Las contrasenas no coinciden.');
+                    setMsg('Las contraseñas no coinciden.');
                     return;
                   }
 
                   setSaving(true);
                   try {
                     const response = await resetPassword(token, password);
-                    setMsg(response.message || 'Contrasena actualizada. Te redirigimos al login...');
+                    setMsg(response.message || 'Contraseña actualizada. Te redirigimos al login...');
                     setTimeout(() => router.push('/login'), 1200);
                   } catch (error: any) {
-                    setMsg(error?.message ?? 'No se pudo cambiar la contrasena');
+                    setMsg(error?.message ?? 'No se pudo cambiar la contraseña');
                   } finally {
                     setSaving(false);
                   }
                 }}
               >
-                {saving ? 'Guardando...' : 'Actualizar contrasena'}
+                {saving ? 'Guardando...' : 'Actualizar contraseña'}
               </button>
               <Link className="btn" href="/login">Cancelar</Link>
             </div>

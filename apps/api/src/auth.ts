@@ -24,6 +24,10 @@ function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
+function looksLikeEmail(value: string) {
+  return value.includes('@');
+}
+
 function hashResetToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
 }
@@ -70,19 +74,19 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     if (!/^[a-z0-9._]+$/.test(cleanUsername)) {
-      return reply.code(400).send({ error: 'El nombre de usuario solo puede usar letras, numeros, punto y guion bajo' });
+      return reply.code(400).send({ error: 'El nombre de usuario solo puede usar letras, números, punto y guion bajo' });
     }
 
     if (cleanNationalId.length < 5) {
-      return reply.code(400).send({ error: 'Numero de cedula invalido' });
+      return reply.code(400).send({ error: 'Número de cédula inválido' });
     }
 
     if (cleanInstagramUsername.length < 2) {
-      return reply.code(400).send({ error: 'Usuario de Instagram invalido' });
+      return reply.code(400).send({ error: 'Usuario de Instagram inválido' });
     }
 
     if (Number.isNaN(birthDateValue.getTime())) {
-      return reply.code(400).send({ error: 'Fecha de nacimiento invalida' });
+      return reply.code(400).send({ error: 'Fecha de nacimiento inválida' });
     }
 
     if (birthDateValue > new Date()) {
@@ -98,7 +102,7 @@ export async function authRoutes(app: FastifyInstance) {
       },
       select: { id: true },
     });
-    if (existsEmail) return reply.code(409).send({ error: 'Ya existe una cuenta con este correo electronico' });
+    if (existsEmail) return reply.code(409).send({ error: 'Ya existe una cuenta con este correo electrónico' });
 
     const existsUsername = await prisma.user.findFirst({
       where: {
@@ -115,7 +119,7 @@ export async function authRoutes(app: FastifyInstance) {
       where: { nationalId: cleanNationalId },
       select: { id: true },
     });
-    if (existsNationalId) return reply.code(409).send({ error: 'Ya existe una cuenta con este numero de cedula' });
+    if (existsNationalId) return reply.code(409).send({ error: 'Ya existe una cuenta con este número de cédula' });
 
     try {
       const user = await prisma.user.create({
@@ -150,13 +154,13 @@ export async function authRoutes(app: FastifyInstance) {
           ? error.meta.target.join(',')
           : String(error.meta?.target ?? '');
         if (target.includes('email')) {
-          return reply.code(409).send({ error: 'Ya existe una cuenta con este correo electronico' });
+          return reply.code(409).send({ error: 'Ya existe una cuenta con este correo electrónico' });
         }
         if (target.includes('username')) {
           return reply.code(409).send({ error: 'Ya existe una cuenta con este nombre de usuario' });
         }
         if (target.includes('nationalId')) {
-          return reply.code(409).send({ error: 'Ya existe una cuenta con este numero de cedula' });
+          return reply.code(409).send({ error: 'Ya existe una cuenta con este número de cédula' });
         }
         return reply.code(409).send({ error: 'Ya existe una cuenta con los datos indicados' });
       }
@@ -170,27 +174,33 @@ export async function authRoutes(app: FastifyInstance) {
 
     const { identifier, password } = parsed.data;
     const cleanIdentifier = identifier.trim();
-    const cleanUsername = normalizeUsername(cleanIdentifier);
-    const cleanNationalId = normalizeNationalId(cleanIdentifier);
+    const identifierIsEmail = looksLikeEmail(cleanIdentifier);
+
+    if (identifierIsEmail) {
+      const emailCandidate = normalizeEmail(cleanIdentifier);
+      if (!/^\S+@\S+\.\S+$/.test(emailCandidate)) {
+        return reply.code(400).send({ error: 'Ingresa un correo electrónico válido o una cédula válida' });
+      }
+    } else {
+      const nationalIdCandidate = normalizeNationalId(cleanIdentifier);
+      if (nationalIdCandidate.length < 5) {
+        return reply.code(400).send({ error: 'Ingresa un correo electrónico válido o una cédula válida' });
+      }
+    }
+
+    const userWhere = identifierIsEmail
+      ? {
+          email: {
+            equals: normalizeEmail(cleanIdentifier),
+            mode: 'insensitive' as const,
+          },
+        }
+      : {
+          nationalId: normalizeNationalId(cleanIdentifier),
+        };
 
     const user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          {
-            email: {
-              equals: cleanIdentifier,
-              mode: 'insensitive',
-            },
-          },
-          {
-            username: {
-              equals: cleanUsername,
-              mode: 'insensitive',
-            },
-          },
-          { nationalId: cleanNationalId },
-        ],
-      },
+      where: userWhere,
     });
 
     if (!user) return reply.code(401).send({ error: 'Invalid credentials' });
@@ -235,7 +245,7 @@ export async function authRoutes(app: FastifyInstance) {
       };
     } = {
       ok: true,
-      message: 'Si el correo existe, te enviamos instrucciones para restablecer tu contrasena.',
+      message: 'Si el correo existe, te enviamos instrucciones para restablecer tu contraseña.',
     };
 
     const user = await prisma.user.findFirst({
@@ -385,7 +395,7 @@ export async function authRoutes(app: FastifyInstance) {
     });
 
     if (!resetToken || resetToken.usedAt || resetToken.expiresAt <= new Date()) {
-      return reply.code(400).send({ error: 'El enlace de recuperacion es invalido o vencio' });
+      return reply.code(400).send({ error: 'El enlace de recuperación es inválido o venció' });
     }
 
     const now = new Date();
@@ -410,7 +420,7 @@ export async function authRoutes(app: FastifyInstance) {
       }),
     ]);
 
-    return reply.send({ ok: true, message: 'Contrasena actualizada correctamente' });
+    return reply.send({ ok: true, message: 'Contraseña actualizada correctamente' });
   });
 
   app.get('/auth/me', { preHandler: [app.authenticate] }, async (req: FastifyRequest, reply) => {

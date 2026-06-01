@@ -14,14 +14,14 @@ export default function ForgotPasswordPage() {
     <>
       <Nav />
       <div className="card" style={{ maxWidth: 560, margin: '0 auto' }}>
-        <h2 style={{ marginTop: 0 }}>Recuperar contrasena</h2>
+        <h2 style={{ marginTop: 0 }}>Recuperar contraseña</h2>
         <p className="small" style={{ marginTop: 0 }}>
-          Escribe tu correo y te enviaremos un enlace para cambiar tu contrasena.
+          Escribe tu correo y te enviaremos un enlace para cambiar tu contraseña.
         </p>
 
         {msg && <div className="card" style={{ marginTop: 10 }}>{msg}</div>}
 
-        <div className="label">Correo electronico</div>
+        <div className="label">Correo electrónico</div>
         <input
           className="input"
           type="email"

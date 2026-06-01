@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { prisma } from './prisma.js';
 import { adminLeagueTeamSchema, bulkDeleteSchema, bulkDeleteTeamsSchema, bulkPredictionsSchema, createLeagueSchema, createMatchSchema, importMatchesCsvSchema, joinLeagueSchema, predictionSchema, setResultSchema } from './schemas.js';
 import { makeJoinCode } from './utils.js';
@@ -153,18 +154,18 @@ function parseMatchesCsv(csvContent: string) {
 
     const kickoffAt = parseCsvDateValue(kickoffRaw);
     if (!kickoffAt) {
-      errors.push({ row: rowNumber, message: `Horario invalido: ${kickoffRaw}` });
+      errors.push({ row: rowNumber, message: `Horario inválido: ${kickoffRaw}` });
       continue;
     }
 
     const lockAt = lockRaw ? parseCsvDateValue(lockRaw) : kickoffAt;
     if (!lockAt) {
-      errors.push({ row: rowNumber, message: `Cierre invalido: ${lockRaw}` });
+      errors.push({ row: rowNumber, message: `Cierre inválido: ${lockRaw}` });
       continue;
     }
 
     if (lockAt > kickoffAt) {
-      errors.push({ row: rowNumber, message: 'El cierre no puede ser despues del kickoff' });
+      errors.push({ row: rowNumber, message: 'El cierre no puede ser después del kickoff' });
       continue;
     }
 
@@ -264,6 +265,14 @@ async function findOrCreateTeamForCsvImport(params: {
 
 function isSuperadmin(req: any) {
   return (req.user as any)?.role === 'SUPERADMIN';
+}
+
+async function findActiveLeagueById(id: string) {
+  return prisma.league.findFirst({ where: { id, deletedAt: null } });
+}
+
+async function findDeletedLeagueById(id: string) {
+  return prisma.league.findFirst({ where: { id, deletedAt: { not: null } } });
 }
 
 function isCatalogFlagUrl(url: string | null | undefined) {
@@ -373,7 +382,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     const uid = (req.user as any).uid as string;
 
     const leagues = await prisma.league.findMany({
-      where: { members: { some: { userId: uid } } },
+      where: { deletedAt: null, members: { some: { userId: uid } } },
       include: {
         _count: {
           select: { members: true, matches: true },
@@ -391,6 +400,7 @@ export async function leagueRoutes(app: FastifyInstance) {
 
     const leagues = await prisma.league.findMany({
       where: {
+        deletedAt: null,
         createdBy: {
           role: 'SUPERADMIN',
         },
@@ -419,6 +429,7 @@ export async function leagueRoutes(app: FastifyInstance) {
   // SUPERADMIN: ver todas las quinielas
   app.get('/admin/leagues', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (_req, reply) => {
     const leagues = await prisma.league.findMany({
+      where: { deletedAt: null },
       include: {
         createdBy: { select: { id: true, username: true, fullName: true, email: true } },
         _count: {
@@ -426,6 +437,21 @@ export async function leagueRoutes(app: FastifyInstance) {
         },
       },
       orderBy: { createdAt: 'desc' },
+    });
+
+    return reply.send({ leagues });
+  });
+
+  app.get('/admin/leagues/deleted', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (_req, reply) => {
+    const leagues = await prisma.league.findMany({
+      where: { deletedAt: { not: null } },
+      include: {
+        createdBy: { select: { id: true, username: true, fullName: true, email: true } },
+        _count: {
+          select: { members: true, matches: true, predictions: true },
+        },
+      },
+      orderBy: { deletedAt: 'desc' },
     });
 
     return reply.send({ leagues });
@@ -594,34 +620,62 @@ export async function leagueRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post('/admin/reset-league-data', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (_req, reply) => {
-    const [leaguesCount, teamsCount, matchesCount, predictionsCount, membersCount] = await Promise.all([
-      prisma.league.count(),
-      prisma.team.count(),
-      prisma.match.count(),
-      prisma.prediction.count(),
-      prisma.leagueMember.count(),
-    ]);
+  app.post('/admin/leagues/:id/trash', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
+    const leagueId = String((req.params as any).id || '').trim();
+    const parsed = z.object({ name: z.string().min(1) }).safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
+
+    const league = await prisma.league.findFirst({ where: { id: leagueId, deletedAt: null } });
+    if (!league) return reply.code(404).send({ error: 'League not found' });
+
+    if (league.name.trim() !== parsed.data.name.trim()) {
+      return reply.code(400).send({ error: 'El nombre de la quiniela no coincide' });
+    }
+
+    const deletedAt = new Date();
+    const trashed = await prisma.league.update({
+      where: { id: league.id },
+      data: { deletedAt },
+    });
+
+    return reply.send({ league: trashed });
+  });
+
+  app.post('/admin/leagues/:id/restore', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
+    const leagueId = String((req.params as any).id || '').trim();
+
+    const league = await findDeletedLeagueById(leagueId);
+    if (!league) return reply.code(404).send({ error: 'League not found' });
+
+    const restored = await prisma.league.update({
+      where: { id: league.id },
+      data: { deletedAt: null },
+    });
+
+    return reply.send({ league: restored });
+  });
+
+  app.post('/admin/leagues/:id/permanent-delete', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
+    const leagueId = String((req.params as any).id || '').trim();
+    const parsed = z.object({ name: z.string().min(1) }).safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
+
+    const league = await findDeletedLeagueById(leagueId);
+    if (!league) return reply.code(404).send({ error: 'League not found' });
+
+    if (league.name.trim() !== parsed.data.name.trim()) {
+      return reply.code(400).send({ error: 'El nombre de la quiniela no coincide' });
+    }
 
     await prisma.$transaction([
-      prisma.prediction.deleteMany({}),
-      prisma.match.deleteMany({}),
-      prisma.team.deleteMany({}),
-      prisma.leagueMember.deleteMany({}),
-      prisma.league.deleteMany({}),
+      prisma.prediction.deleteMany({ where: { leagueId } }),
+      prisma.match.deleteMany({ where: { leagueId } }),
+      prisma.team.deleteMany({ where: { leagueId } }),
+      prisma.leagueMember.deleteMany({ where: { leagueId } }),
+      prisma.league.delete({ where: { id: leagueId } }),
     ]);
 
-    return reply.send({
-      ok: true,
-      deleted: {
-        leagues: leaguesCount,
-        teams: teamsCount,
-        matches: matchesCount,
-        predictions: predictionsCount,
-        members: membersCount,
-      },
-      usersPreserved: true,
-    });
+    return reply.send({ ok: true });
   });
 
   app.get('/admin/teams', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
@@ -634,8 +688,8 @@ export async function leagueRoutes(app: FastifyInstance) {
 
     const teams = await prisma.team.findMany({
       where: q
-        ? { leagueId, name: { contains: q, mode: 'insensitive' } }
-        : { leagueId },
+        ? { leagueId, league: { deletedAt: null }, name: { contains: q, mode: 'insensitive' } }
+        : { leagueId, league: { deletedAt: null } },
       orderBy: [{ name: 'asc' }],
       take: 300,
     });
@@ -645,7 +699,7 @@ export async function leagueRoutes(app: FastifyInstance) {
 
   app.get('/admin/team-images', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (_req, reply) => {
     const leagueRows = await prisma.team.findMany({
-      where: { logoUrl: { not: null } },
+      where: { logoUrl: { not: null }, league: { deletedAt: null } },
       select: { logoUrl: true },
       distinct: ['logoUrl'],
       take: 200,
@@ -674,7 +728,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     const logoUrl = parsed.data.logoUrl.trim();
 
     const league = await prisma.league.findUnique({ where: { id: leagueId } });
-    if (!league) return reply.code(404).send({ error: 'League not found' });
+    if (!league || league.deletedAt) return reply.code(404).send({ error: 'League not found' });
 
     const team = await prisma.team.create({
       data: { leagueId, name, logoUrl },
@@ -792,7 +846,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     const q = String((req.query as any)?.q || '').trim();
 
     const league = await prisma.league.findUnique({ where: { id: leagueId } });
-    if (!league) return reply.code(404).send({ error: 'League not found' });
+    if (!league || league.deletedAt) return reply.code(404).send({ error: 'League not found' });
 
     const membership = await prisma.leagueMember.findUnique({
       where: { leagueId_userId: { leagueId, userId: uid } },
@@ -816,7 +870,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     const uid = (req.user as any).uid as string;
     const leagueId = (req.params as any).id as string;
 
-    const league = await prisma.league.findUnique({ where: { id: leagueId } });
+    const league = await findActiveLeagueById(leagueId);
     if (!league) return reply.code(404).send({ error: 'League not found' });
 
     const membership = await prisma.leagueMember.findUnique({
@@ -858,7 +912,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     const canManage = membership?.role === 'OWNER' || isSuperadmin(req);
     if (!canManage) return reply.code(403).send({ error: 'Forbidden' });
 
-    const league = await prisma.league.findUnique({ where: { id: leagueId } });
+    const league = await findActiveLeagueById(leagueId);
     if (!league) return reply.code(404).send({ error: 'League not found' });
 
     const name = parsed.data.name.trim();
@@ -898,7 +952,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     const uid = (req.user as any).uid as string;
     const id = (req.params as any).id as string;
 
-    const league = await prisma.league.findUnique({ where: { id } });
+    const league = await findActiveLeagueById(id);
     if (!league) return reply.code(404).send({ error: 'League not found' });
 
     const membership = await prisma.leagueMember.findUnique({
@@ -943,7 +997,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     const canManage = membership?.role === 'OWNER' || isSuperadmin(req);
     if (!canManage) return reply.code(403).send({ error: 'Forbidden' });
 
-    const league = await prisma.league.findUnique({ where: { id: leagueId } });
+    const league = await findActiveLeagueById(leagueId);
     if (!league) return reply.code(404).send({ error: 'League not found' });
 
     const { homeTeam, awayTeam, kickoffAt, lockAt, group } = parsed.data;
@@ -954,10 +1008,10 @@ export async function leagueRoutes(app: FastifyInstance) {
     const kickoffDate = new Date(kickoffAt);
     const lockDate = lockAt ? new Date(lockAt) : kickoffDate;
     if (Number.isNaN(kickoffDate.getTime()) || Number.isNaN(lockDate.getTime())) {
-      return reply.code(400).send({ error: 'Fecha invalida' });
+      return reply.code(400).send({ error: 'Fecha inválida' });
     }
     if (lockDate > kickoffDate) {
-      return reply.code(400).send({ error: 'El cierre no puede ser despues del kickoff' });
+      return reply.code(400).send({ error: 'El cierre no puede ser después del kickoff' });
     }
 
     const normalizedHome = homeTeam.trim();
@@ -998,7 +1052,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     const uid = (req.user as any).uid as string;
     const leagueId = (req.params as any).id as string;
 
-    const league = await prisma.league.findUnique({ where: { id: leagueId } });
+    const league = await findActiveLeagueById(leagueId);
     if (!league) return reply.code(404).send({ error: 'League not found' });
 
     const membership = await prisma.leagueMember.findUnique({
@@ -1012,7 +1066,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     try {
       parsedCsv = parseMatchesCsv(parsed.data.csvContent);
     } catch (error: any) {
-      return reply.code(400).send({ error: error?.message ?? 'CSV invalido' });
+      return reply.code(400).send({ error: error?.message ?? 'CSV inválido' });
     }
 
     let createdTeams = 0;
@@ -1134,10 +1188,10 @@ export async function leagueRoutes(app: FastifyInstance) {
     const kickoffDate = new Date(kickoffAt);
     const lockDate = lockAt ? new Date(lockAt) : kickoffDate;
     if (Number.isNaN(kickoffDate.getTime()) || Number.isNaN(lockDate.getTime())) {
-      return reply.code(400).send({ error: 'Fecha invalida' });
+      return reply.code(400).send({ error: 'Fecha inválida' });
     }
     if (lockDate > kickoffDate) {
-      return reply.code(400).send({ error: 'El cierre no puede ser despues del kickoff' });
+      return reply.code(400).send({ error: 'El cierre no puede ser después del kickoff' });
     }
 
     const normalizedHome = homeTeam.trim();
@@ -1252,7 +1306,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     });
     if (!membership) return reply.code(403).send({ error: 'Not a member' });
 
-    const league = await prisma.league.findUnique({ where: { id: leagueId } });
+    const league = await findActiveLeagueById(leagueId);
     if (!league) return reply.code(404).send({ error: 'League not found' });
 
     const { matchId, predHome, predAway } = parsed.data;
@@ -1288,7 +1342,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     });
     if (!membership) return reply.code(403).send({ error: 'Not a member' });
 
-    const league = await prisma.league.findUnique({ where: { id: leagueId } });
+    const league = await findActiveLeagueById(leagueId);
     if (!league) return reply.code(404).send({ error: 'League not found' });
 
     // Keep last edit for repeated match IDs.
