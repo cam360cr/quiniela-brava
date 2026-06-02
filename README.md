@@ -181,3 +181,13 @@ cd /home/loshinchassportbar-quiniela/htdocs/quiniela.loshinchassportbar.com/quin
 git pull
 docker compose down --remove-orphans
 docker compose up -d --build --force-recreate
+
+
+
+cd /home/loshinchassportbar-quiniela/htdocs/quiniela.loshinchassportbar.com/quiniela-brava
+git pull
+docker compose down --remove-orphans
+docker compose build --no-cache --pull
+docker compose up -d --force-recreate --remove-orphans
+docker image prune -f
+docker builder prune -f
