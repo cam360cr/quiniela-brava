@@ -1683,6 +1683,37 @@ h1,h2,h3{
   flex-wrap:wrap;
 }
 
+.wc-join-cta{
+  margin-top:14px;
+  border:1px solid rgba(255,209,0,.55);
+  border-radius:12px;
+  padding:12px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255,209,0,.16), transparent 45%),
+    linear-gradient(180deg, rgba(255,209,0,.09), rgba(255,209,0,.03));
+}
+
+.wc-join-copy{
+  margin:0;
+  font-weight:700;
+  color:#f8f0c1;
+}
+
+.wc-join-actions{
+  margin-top:10px;
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0,1fr));
+  gap:10px;
+}
+
+.wc-join-actions .btn{
+  min-height:48px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+}
+
 .wc-pill{
   border:1px solid var(--yellow);
   border-radius:999px;
@@ -2006,6 +2037,7 @@ h1,h2,h3{
   .grid.cols3{grid-template-columns:1fr}
   .pick-grid{grid-template-columns:1fr}
   .landing-auth-actions{grid-template-columns:1fr; gap:12px}
+  .wc-join-actions{grid-template-columns:1fr}
   .rules-example-grid{grid-template-columns:1fr}
   .register-rules-box{max-height:260px}
   .wc-groups-grid{grid-template-columns:repeat(2, minmax(0,1fr))}

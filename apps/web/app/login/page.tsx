@@ -20,7 +20,7 @@ export default function LoginPage() {
         {msg && <div className="card">{msg}</div>}
 
         <div className="label">Correo o cédula</div>
-        <input className="input" value={identifier} onChange={e=>setIdentifier(e.target.value)} placeholder="admin@demo.com o 1-1234-5678" />
+        <input className="input" value={identifier} onChange={e=>setIdentifier(e.target.value)} placeholder="tu@gmail.com o 1-1234-5678" />
 
         <div className="label">Contraseña</div>
         <input className="input" value={password} onChange={e=>setPassword(e.target.value)} type="password" placeholder="••••••" />

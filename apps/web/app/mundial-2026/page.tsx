@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import Nav from '../../components/Nav';
 import { flagCodeByTeam, toSpanishTeamName } from '../../lib/teamNames';
 
@@ -330,6 +331,14 @@ export default function Mundial2026Page() {
           Sección abierta para cualquiera con enlace. Incluye grupos oficiales A-L, selecciones participantes
           y calendario de fase de grupos para vivir el torneo como se debe.
         </p>
+        <div className="wc-join-cta">
+          <p className="small wc-join-copy">
+            Sumate a la quiniela y participá por premios con tus pronósticos.
+          </p>
+          <div className="wc-join-actions">
+            <Link className="btn primary" href="/register">Crear cuenta y participar</Link>
+          </div>
+        </div>
         <div className="wc-pill-row">
           <span className="wc-pill">Fase de grupos: 11 - 27 Jun</span>
           <span className="wc-pill">Dieciseisavos (32): 28 Jun - 3 Jul</span>

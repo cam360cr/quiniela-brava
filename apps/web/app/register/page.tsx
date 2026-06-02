@@ -10,6 +10,8 @@ import { useRouter } from 'next/navigation';
 const INSTAGRAM_URL = 'https://www.instagram.com/barrabravasportbar/';
 const instagramHandleRegex = /^@?[A-Za-z0-9._]+$/;
 const appUsernameRegex = /^@?[A-Za-z0-9._]+$/;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 2200;
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -18,6 +20,103 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(new Error('No se pudo leer la imagen'));
     reader.readAsDataURL(file);
   });
+}
+
+function dataUrlByteSize(dataUrl: string) {
+  const base64 = (dataUrl.split(',')[1] || '').replace(/\s/g, '');
+  if (!base64) return 0;
+  const padding = (base64.match(/=*$/)?.[0].length ?? 0);
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+}
+
+function loadImageFromFile(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('No se pudo procesar la imagen'));
+    };
+
+    image.src = objectUrl;
+  });
+}
+
+async function toUploadReadyImage(file: File) {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('El archivo seleccionado no es una imagen válida');
+  }
+
+  const originalDataUrl = await fileToDataUrl(file);
+  const originalDataUrlBytes = dataUrlByteSize(originalDataUrl);
+  if (originalDataUrlBytes <= MAX_IMAGE_BYTES) {
+    return { dataUrl: originalDataUrl, compressed: false };
+  }
+
+  const source = await loadImageFromFile(file);
+  const sourceWidth = source.naturalWidth || source.width;
+  const sourceHeight = source.naturalHeight || source.height;
+
+  if (!sourceWidth || !sourceHeight) {
+    throw new Error('No se pudo leer el tamaño de la imagen');
+  }
+
+  const maxSide = Math.max(sourceWidth, sourceHeight);
+  const resizeRatio = maxSide > MAX_IMAGE_DIMENSION ? MAX_IMAGE_DIMENSION / maxSide : 1;
+  const baseWidth = Math.max(1, Math.round(sourceWidth * resizeRatio));
+  const baseHeight = Math.max(1, Math.round(sourceHeight * resizeRatio));
+
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Tu navegador no soporta compresión de imágenes');
+
+  const attempts = [
+    { quality: 0.9, scale: 1 },
+    { quality: 0.82, scale: 0.9 },
+    { quality: 0.74, scale: 0.82 },
+    { quality: 0.66, scale: 0.75 },
+    { quality: 0.58, scale: 0.68 },
+    { quality: 0.5, scale: 0.62 },
+  ];
+
+  let bestDataUrl = '';
+  let bestBytes = Number.POSITIVE_INFINITY;
+
+  for (const attempt of attempts) {
+    const width = Math.max(1, Math.round(baseWidth * attempt.scale));
+    const height = Math.max(1, Math.round(baseHeight * attempt.scale));
+
+    canvas.width = width;
+    canvas.height = height;
+
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, width, height);
+    context.drawImage(source, 0, 0, width, height);
+
+    const candidate = canvas.toDataURL('image/jpeg', attempt.quality);
+    const candidateBytes = dataUrlByteSize(candidate);
+
+    if (candidateBytes < bestBytes) {
+      bestDataUrl = candidate;
+      bestBytes = candidateBytes;
+    }
+
+    if (candidateBytes <= MAX_IMAGE_BYTES) {
+      return { dataUrl: candidate, compressed: true };
+    }
+  }
+
+  if (bestDataUrl) {
+    throw new Error('La imagen sigue pesando más de 4 MB. Prueba con otra foto más ligera o recortada.');
+  }
+
+  throw new Error('No se pudo comprimir la imagen');
 }
 
 export default function RegisterPage() {
@@ -107,7 +206,7 @@ export default function RegisterPage() {
                 <div className="register-step-content">
                   <p className="small" style={{ marginTop: 0, marginBottom: 8 }}>
                     Carga una foto clara de una factura real de compra hecha en Barra Brava.
-                    Queremos asegurarnos de que solo participen personas que han consumido en Barra Brava.
+                    La factura debe ser por un consumo mínimo de 7.000 colones.
                   </p>
                   <input
                     className="input register-file-input"
@@ -118,12 +217,9 @@ export default function RegisterPage() {
                       if (!file) return;
 
                       try {
-                        if (file.size > 4 * 1024 * 1024) {
-                          throw new Error('La imagen no puede pesar más de 4 MB');
-                        }
-                        const dataUrl = await fileToDataUrl(file);
+                        const { dataUrl, compressed } = await toUploadReadyImage(file);
                         setPurchaseProofImage(dataUrl);
-                        setMsg(null);
+                        setMsg(compressed ? 'La imagen se comprimió automáticamente para cumplir el límite de 4 MB.' : null);
                       } catch (error: any) {
                         setMsg(error?.message ?? 'No se pudo procesar la foto de factura');
                       }
@@ -295,7 +391,7 @@ export default function RegisterPage() {
               >
                 {saving ? 'Creando...' : 'Crear cuenta'}
               </button>
-              <Link className="btn" href="/login">Ya tengo cuenta</Link>
+              <Link className="btn" href="/login">¿Ya tienes una cuenta? Entrar</Link>
             </div>
           </div>
         </div>

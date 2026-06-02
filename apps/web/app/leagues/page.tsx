@@ -21,6 +21,7 @@ type ActiveLeague = {
 export default function LeaguesPage() {
   const [leagues, setLeagues] = useState<League[]>([]);
   const [activeLeagues, setActiveLeagues] = useState<ActiveLeague[]>([]);
+  const [joiningLeagueId, setJoiningLeagueId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [name, setName] = useState('Mi Quiniela');
   const [description, setDescription] = useState('');
@@ -167,15 +168,62 @@ export default function LeaguesPage() {
                     <td data-label="Código" className="qb-code-cell">{l.joinCode}</td>
                     <td data-label="Participantes">{l._count.members}</td>
                     <td data-label="Acción">
-                      <button className="btn" onClick={async () => {
-                        setMsg(null);
-                        try {
-                          await apiFetch<{ leagueId: string }>('/leagues/join', { method: 'POST', body: JSON.stringify({ joinCode: l.joinCode }) });
-                          await load();
-                        } catch (e: any) {
-                          setMsg(e.message);
-                        }
-                      }}>Unirme</button>
+                      <button
+                        className="btn"
+                        disabled={joiningLeagueId === l.id}
+                        onClick={async () => {
+                          if (joiningLeagueId) return;
+
+                          setJoiningLeagueId(l.id);
+                          setMsg(null);
+
+                          try {
+                            await apiFetch<{ leagueId: string }>('/leagues/join', {
+                              method: 'POST',
+                              body: JSON.stringify({ joinCode: l.joinCode }),
+                            });
+
+                            try {
+                              await load();
+                            } catch {
+                              setActiveLeagues((prev) =>
+                                prev.map((item) =>
+                                  item.id === l.id
+                                    ? {
+                                        ...item,
+                                        isMember: true,
+                                        _count: {
+                                          ...item._count,
+                                          members: item._count.members + 1,
+                                        },
+                                      }
+                                    : item
+                                )
+                              );
+                            }
+
+                            setMsg(`Te uniste a "${l.name}".`);
+                          } catch (e: any) {
+                            try {
+                              const active = await apiFetch<{ leagues: ActiveLeague[] }>('/leagues/active');
+                              setActiveLeagues(active.leagues);
+                              const joined = active.leagues.some((item) => item.id === l.id && item.isMember);
+                              if (joined) {
+                                setMsg(`Te uniste a "${l.name}".`);
+                                return;
+                              }
+                            } catch {
+                              // Preserve original error if reconciliation also fails.
+                            }
+
+                            setMsg(e?.message ?? 'No se pudo unir a la quiniela');
+                          } finally {
+                            setJoiningLeagueId(null);
+                          }
+                        }}
+                      >
+                        {joiningLeagueId === l.id ? 'Uniendo...' : 'Unirme'}
+                      </button>
                     </td>
                   </tr>
                 ))}
