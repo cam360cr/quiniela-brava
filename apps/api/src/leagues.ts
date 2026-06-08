@@ -1399,7 +1399,7 @@ export async function leagueRoutes(app: FastifyInstance) {
 
     const members = await prisma.leagueMember.findMany({
       where: { leagueId },
-      include: { user: { select: { id: true, username: true, fullName: true } } },
+      include: { user: { select: { id: true, username: true, fullName: true, role: true } } },
     });
 
     const points = await prisma.prediction.groupBy({
@@ -1411,6 +1411,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     const map = new Map(points.map(p => [p.userId, p._sum.points ?? 0]));
 
     const leaderboard = members
+      .filter((m) => m.user.role !== 'SUPERADMIN')
       .map((m) => {
         const displayName = m.user.fullName?.trim() || `@${m.user.username}`;
         return {

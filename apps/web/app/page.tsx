@@ -125,6 +125,9 @@ export default function Page() {
           <p className="small"><b>Correo:</b> {me.email}</p>
           {me.nationalId && <p className="small"><b>Cédula:</b> {me.nationalId}</p>}
           <p className="small"><b>Rol:</b> {me.role}</p>
+          <div className="row-actions" style={{ marginTop: 12 }}>
+            <Link className="btn" href="/profile">Editar perfil</Link>
+          </div>
           {me.role === 'SUPERADMIN' && (
             <div className="row-actions" style={{ marginTop: 12 }}>
               <Link className="btn green" href="/admin">Abrir admin</Link>

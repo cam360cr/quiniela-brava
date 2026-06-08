@@ -3,7 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma.js';
-import { forgotPasswordSchema, loginSchema, registerSchema, resetPasswordSchema } from './schemas.js';
+import { forgotPasswordSchema, loginSchema, registerSchema, resetPasswordSchema, updateProfileSchema } from './schemas.js';
 import { sendPasswordResetEmail } from './mailer.js';
 
 function normalizeNationalId(value: string) {
@@ -53,7 +53,6 @@ export async function authRoutes(app: FastifyInstance) {
       nationalId,
       instagramUsername,
       birthDate,
-      purchaseProofImage,
       followsInstagram,
       acceptedRules,
       password,
@@ -130,7 +129,6 @@ export async function authRoutes(app: FastifyInstance) {
           nationalId: cleanNationalId,
           instagramUsername: cleanInstagramUsername,
           birthDate: birthDateValue,
-          purchaseProofImage,
           followsInstagram,
           passwordHash: await bcrypt.hash(password, 10),
         },
@@ -441,5 +439,158 @@ export async function authRoutes(app: FastifyInstance) {
       },
     });
     return reply.send({ user });
+  });
+
+  app.patch('/auth/me', { preHandler: [app.authenticate] }, async (req: FastifyRequest, reply) => {
+    const parsed = updateProfileSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
+
+    const uid = (req.user as any).uid as string;
+    const data = parsed.data;
+
+    if (Object.keys(data).length === 0) {
+      return reply.code(400).send({ error: 'No hay cambios para actualizar' });
+    }
+
+    const current = await prisma.user.findUnique({
+      where: { id: uid },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        nationalId: true,
+      },
+    });
+
+    if (!current) return reply.code(404).send({ error: 'Usuario no encontrado' });
+
+    const updateData: Prisma.UserUpdateInput = {};
+
+    if (typeof data.email === 'string') {
+      const cleanEmail = normalizeEmail(data.email);
+      if (cleanEmail !== normalizeEmail(current.email)) {
+        const existsEmail = await prisma.user.findFirst({
+          where: {
+            id: { not: uid },
+            email: {
+              equals: cleanEmail,
+              mode: 'insensitive',
+            },
+          },
+          select: { id: true },
+        });
+        if (existsEmail) return reply.code(409).send({ error: 'Ya existe una cuenta con este correo electrónico' });
+      }
+      updateData.email = cleanEmail;
+    }
+
+    if (typeof data.username === 'string') {
+      const cleanUsername = normalizeUsername(data.username);
+      if (cleanUsername.length < 3 || cleanUsername.length > 24) {
+        return reply.code(400).send({ error: 'El nombre de usuario debe tener entre 3 y 24 caracteres' });
+      }
+      if (!/^[a-z0-9._]+$/.test(cleanUsername)) {
+        return reply.code(400).send({ error: 'El nombre de usuario solo puede usar letras, números, punto y guion bajo' });
+      }
+
+      if (cleanUsername !== normalizeUsername(current.username)) {
+        const existsUsername = await prisma.user.findFirst({
+          where: {
+            id: { not: uid },
+            username: {
+              equals: cleanUsername,
+              mode: 'insensitive',
+            },
+          },
+          select: { id: true },
+        });
+        if (existsUsername) return reply.code(409).send({ error: 'Ya existe una cuenta con este nombre de usuario' });
+      }
+
+      updateData.username = cleanUsername;
+    }
+
+    if (typeof data.fullName === 'string') {
+      const cleanFullName = data.fullName.trim();
+      if (cleanFullName.length < 5) {
+        return reply.code(400).send({ error: 'El nombre completo debe tener al menos 5 caracteres' });
+      }
+      updateData.fullName = cleanFullName;
+    }
+
+    if (typeof data.nationalId === 'string') {
+      const cleanNationalId = normalizeNationalId(data.nationalId);
+      if (cleanNationalId.length < 5) {
+        return reply.code(400).send({ error: 'Número de cédula inválido' });
+      }
+
+      if (cleanNationalId !== (current.nationalId ?? '')) {
+        const existsNationalId = await prisma.user.findUnique({
+          where: { nationalId: cleanNationalId },
+          select: { id: true },
+        });
+        if (existsNationalId && existsNationalId.id !== uid) {
+          return reply.code(409).send({ error: 'Ya existe una cuenta con este número de cédula' });
+        }
+      }
+
+      updateData.nationalId = cleanNationalId;
+    }
+
+    if (typeof data.instagramUsername === 'string') {
+      const cleanInstagramUsername = normalizeInstagramUsername(data.instagramUsername);
+      if (cleanInstagramUsername.length < 2) {
+        return reply.code(400).send({ error: 'Usuario de Instagram inválido' });
+      }
+      updateData.instagramUsername = cleanInstagramUsername;
+    }
+
+    if (typeof data.birthDate === 'string') {
+      const birthDateValue = new Date(`${data.birthDate}T00:00:00.000Z`);
+      if (Number.isNaN(birthDateValue.getTime())) {
+        return reply.code(400).send({ error: 'Fecha de nacimiento inválida' });
+      }
+      if (birthDateValue > new Date()) {
+        return reply.code(400).send({ error: 'La fecha de nacimiento no puede ser futura' });
+      }
+      updateData.birthDate = birthDateValue;
+    }
+
+    try {
+      const user = await prisma.user.update({
+        where: { id: uid },
+        data: updateData,
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          fullName: true,
+          nationalId: true,
+          instagramUsername: true,
+          birthDate: true,
+          followsInstagram: true,
+          role: true,
+          createdAt: true,
+        },
+      });
+
+      return reply.send({ user });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const target = Array.isArray(error.meta?.target)
+          ? error.meta.target.join(',')
+          : String(error.meta?.target ?? '');
+        if (target.includes('email')) {
+          return reply.code(409).send({ error: 'Ya existe una cuenta con este correo electrónico' });
+        }
+        if (target.includes('username')) {
+          return reply.code(409).send({ error: 'Ya existe una cuenta con este nombre de usuario' });
+        }
+        if (target.includes('nationalId')) {
+          return reply.code(409).send({ error: 'Ya existe una cuenta con este número de cédula' });
+        }
+      }
+      throw error;
+    }
   });
 }

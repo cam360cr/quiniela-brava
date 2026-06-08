@@ -40,6 +40,7 @@ export default function Nav() {
         <Link className="btn" href="/reglamento">Reglamento</Link>
         {showMenu && <Link className="btn" href="/">Inicio</Link>}
         {showMenu && <Link className="btn" href="/leagues">Mis quinielas</Link>}
+        {showMenu && <Link className="btn" href="/profile">Mi perfil</Link>}
         {!loading && me?.role === 'SUPERADMIN' && <Link className="btn green" href="/admin">Admin</Link>}
         {!loading && me ? (
           <>

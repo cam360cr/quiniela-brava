@@ -328,8 +328,7 @@ export default function Mundial2026Page() {
         <p className="wc-kicker">Público y compartible</p>
         <h1 style={{ marginTop: 8, marginBottom: 10 }}>Calendario Mundial FIFA 2026</h1>
         <p className="small" style={{ maxWidth: 880 }}>
-          Sección abierta para cualquiera con enlace. Incluye grupos oficiales A-L, selecciones participantes
-          y calendario de fase de grupos para vivir el torneo como se debe.
+          Incluye grupos oficiales A-L, selecciones participantes y calendario de fase de grupos para vivir el torneo como se debe.
         </p>
         <div className="wc-join-cta">
           <p className="small wc-join-copy">

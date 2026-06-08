@@ -806,7 +806,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
           </details>
         )}
 
-        <section className="card">
+        <section className="card qb-matches-panel">
           <div className="row-actions" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
             <h3 style={{ marginTop: 0, marginBottom: 0 }}>Mis partidos</h3>
             <div className="row-actions">

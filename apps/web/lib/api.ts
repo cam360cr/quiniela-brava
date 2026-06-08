@@ -34,8 +34,10 @@ export type User = {
   nationalId: string | null;
   instagramUsername: string | null;
   birthDate: string | null;
+  purchaseProofImage?: string | null;
   followsInstagram: boolean;
   role: 'USER' | 'SUPERADMIN';
+  createdAt?: string;
 };
 
 export function getToken() {

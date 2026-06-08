@@ -9,7 +9,6 @@ export const registerSchema = z.object({
   nationalId: z.string().min(5).max(32).regex(/^[0-9A-Za-z\-\s]+$/),
   instagramUsername: z.string().min(2).max(40).regex(/^@?[A-Za-z0-9._]+$/),
   birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  purchaseProofImage: imageDataUrlSchema,
   followsInstagram: z.boolean().refine((value) => value, {
     message: 'Debes confirmar que sigues a Barra Brava en Instagram',
   }),
@@ -31,6 +30,15 @@ export const forgotPasswordSchema = z.object({
 export const resetPasswordSchema = z.object({
   token: z.string().min(32).max(512),
   password: z.string().min(6).max(72),
+});
+
+export const updateProfileSchema = z.object({
+  email: z.string().email().optional(),
+  username: z.string().min(3).max(30).regex(/^@?[A-Za-z0-9._]+$/).optional(),
+  fullName: z.string().min(5).max(120).optional(),
+  nationalId: z.string().min(5).max(32).regex(/^[0-9A-Za-z\-\s]+$/).optional(),
+  instagramUsername: z.string().min(2).max(40).regex(/^@?[A-Za-z0-9._]+$/).optional(),
+  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export const createLeagueSchema = z.object({

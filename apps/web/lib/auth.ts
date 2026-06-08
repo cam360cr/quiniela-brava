@@ -9,7 +9,6 @@ type RegisterPayload = {
   nationalId: string;
   instagramUsername: string;
   birthDate: string;
-  purchaseProofImage: string;
   followsInstagram: boolean;
   acceptedRules: boolean;
   password: string;

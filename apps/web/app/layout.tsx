@@ -56,6 +56,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </div>
         <PublicLogosRibbon logos={publicLogos} />
         <div className="container">{children}</div>
+        <footer className="site-support-note" role="contentinfo">
+          <div className="site-support-note-inner">
+            <span>Si tienes dudas o problemas con la quiniela:</span>{' '}
+            <a href="mailto:quiniela@loshinchassportbar.com">quiniela@loshinchassportbar.com</a>
+          </div>
+        </footer>
       </body>
     </html>
   );

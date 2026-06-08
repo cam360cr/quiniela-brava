@@ -17,7 +17,6 @@ export default function ReglamentoContent({ compact = false }: ReglamentoContent
           La participación en la Quiniela es totalmente gratuita. Para participar debes cumplir todos los siguientes requisitos:
         </p>
         <ul className="rules-list small">
-          <li>Presentar un recibo de consumo mínimo de C7.000 realizado en cualquiera de los Barra Brava participantes.</li>
           <li>Seguir nuestra cuenta oficial en Instagram: @barrabravasportbar.</li>
           <li>Completar correctamente el formulario o mecanismo oficial de participación.</li>
         </ul>
@@ -95,7 +94,6 @@ export default function ReglamentoContent({ compact = false }: ReglamentoContent
           <li>Solo se permitirá una participación por persona.</li>
           <li>Los participantes deberán ingresar información real y verificable.</li>
           <li>Participaciones duplicadas, información falsa o intentos de manipulación podrán resultar en descalificación inmediata.</li>
-          <li>Barra Brava podrá solicitar verificación de identidad y comprobante de compra cuando sea necesario.</li>
         </ul>
       </section>
 
