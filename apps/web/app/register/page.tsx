@@ -37,7 +37,7 @@ export default function RegisterPage() {
         </p>
 
         <div className="register-layout">
-          <div className="card register-panel">
+          <div className="card register-panel register-panel-steps">
             <h3 style={{ marginTop: 0, marginBottom: 6 }}>Pasos para habilitar tu participación</h3>
             <p className="small" style={{ marginTop: 0, marginBottom: 0 }}>
               Completa estos pasos antes de crear tu cuenta.
@@ -95,20 +95,11 @@ export default function RegisterPage() {
                 <div className="register-step-title">Lee y acepta el reglamento oficial</div>
                 <div className="register-step-content">
                   <p className="small" style={{ marginTop: 0, marginBottom: 8 }}>
-                    Debes leer el reglamento completo antes de crear tu cuenta.
+                    Debes leer el reglamento completo antes de crear tu cuenta. La confirmación se realiza en el formulario.
                   </p>
                   <div className="register-rules-box">
                     <ReglamentoContent compact />
                   </div>
-                  <label className="small register-confirm-row register-rules-check">
-                    <input
-                      type="checkbox"
-                      checked={acceptedRules}
-                      onChange={(e) => setAcceptedRules(e.target.checked)}
-                      style={{ marginTop: 2 }}
-                    />
-                    Confirmo que leí y acepto el reglamento de la quiniela.
-                  </label>
                   <div className="small" style={{ marginTop: 8 }}>
                     También puedes verlo en una página dedicada: <Link href="/reglamento">Ver reglamento completo</Link>
                   </div>
@@ -117,7 +108,7 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <div className="card register-panel">
+          <div className="card register-panel register-panel-account">
             <h3 style={{ marginTop: 0, marginBottom: 6 }}>Datos de tu cuenta</h3>
             <p className="small" style={{ marginTop: 0 }}>
               Este formulario crea tu acceso para entrar a quinielas privadas.
@@ -191,6 +182,16 @@ export default function RegisterPage() {
                 autoComplete="new-password"
               />
             </div>
+
+            <label className="small register-confirm-row register-rules-check register-account-rules-check">
+              <input
+                type="checkbox"
+                checked={acceptedRules}
+                onChange={(e) => setAcceptedRules(e.target.checked)}
+                style={{ marginTop: 2 }}
+              />
+              Confirmo que leí y acepto el reglamento de la quiniela.
+            </label>
 
             <div className="row-actions register-actions">
               <button
