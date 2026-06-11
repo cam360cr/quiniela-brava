@@ -12,6 +12,8 @@ export function calcPoints(
   const predDiff = predHome - predAway;
   const finalDiff = finalHome - finalAway;
 
+  if (predDiff === 0 && finalDiff === 0) return CORRECT_WINNER_POINTS;
+
   // If either prediction or final result is a draw, there is no winner to compare.
   if (predDiff === 0 || finalDiff === 0) return 0;
 

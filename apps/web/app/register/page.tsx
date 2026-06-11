@@ -36,8 +36,6 @@ export default function RegisterPage() {
           El correo electrónico, usuario y número de cédula deben ser únicos.
         </p>
 
-        {msg && <div className={`card register-msg ${msgType === 'success' ? 'register-msg-success' : ''}`}>{msg}</div>}
-
         <div className="register-layout">
           <div className="card register-panel">
             <h3 style={{ marginTop: 0, marginBottom: 6 }}>Pasos para habilitar tu participación</h3>
@@ -245,6 +243,15 @@ export default function RegisterPage() {
               </button>
               <Link className="btn" href="/login">¿Ya tienes una cuenta? Entrar</Link>
             </div>
+
+            {msg && (
+              <div
+                className={`card register-msg register-submit-msg ${msgType === 'success' ? 'register-msg-success' : ''}`}
+                aria-live="polite"
+              >
+                {msg}
+              </div>
+            )}
           </div>
         </div>
       </div>

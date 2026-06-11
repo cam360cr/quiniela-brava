@@ -28,6 +28,48 @@ function looksLikeEmail(value: string) {
   return value.includes('@');
 }
 
+async function findUserByLoginIdentifier(identifier: string) {
+  const cleanIdentifier = identifier.trim();
+
+  if (looksLikeEmail(cleanIdentifier)) {
+    const emailCandidate = normalizeEmail(cleanIdentifier);
+    if (/^\S+@\S+\.\S+$/.test(emailCandidate)) {
+      const user = await prisma.user.findFirst({
+        where: {
+          email: {
+            equals: emailCandidate,
+            mode: 'insensitive',
+          },
+        },
+      });
+      if (user) return user;
+    }
+  }
+
+  const nationalIdCandidate = normalizeNationalId(cleanIdentifier);
+  if (nationalIdCandidate.length >= 5) {
+    const user = await prisma.user.findFirst({
+      where: { nationalId: nationalIdCandidate },
+    });
+    if (user) return user;
+  }
+
+  const usernameCandidate = normalizeUsername(cleanIdentifier);
+  if (usernameCandidate.length >= 3) {
+    const user = await prisma.user.findFirst({
+      where: {
+        username: {
+          equals: usernameCandidate,
+          mode: 'insensitive',
+        },
+      },
+    });
+    if (user) return user;
+  }
+
+  return null;
+}
+
 function hashResetToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
 }
@@ -171,35 +213,11 @@ export async function authRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload' });
 
     const { identifier, password } = parsed.data;
-    const cleanIdentifier = identifier.trim();
-    const identifierIsEmail = looksLikeEmail(cleanIdentifier);
-
-    if (identifierIsEmail) {
-      const emailCandidate = normalizeEmail(cleanIdentifier);
-      if (!/^\S+@\S+\.\S+$/.test(emailCandidate)) {
-        return reply.code(400).send({ error: 'Ingresa un correo electrónico válido o una cédula válida' });
-      }
-    } else {
-      const nationalIdCandidate = normalizeNationalId(cleanIdentifier);
-      if (nationalIdCandidate.length < 5) {
-        return reply.code(400).send({ error: 'Ingresa un correo electrónico válido o una cédula válida' });
-      }
+    if (identifier.trim().length < 3) {
+      return reply.code(400).send({ error: 'Ingresa un correo electrónico o cédula válido' });
     }
 
-    const userWhere = identifierIsEmail
-      ? {
-          email: {
-            equals: normalizeEmail(cleanIdentifier),
-            mode: 'insensitive' as const,
-          },
-        }
-      : {
-          nationalId: normalizeNationalId(cleanIdentifier),
-        };
-
-    const user = await prisma.user.findFirst({
-      where: userWhere,
-    });
+    const user = await findUserByLoginIdentifier(identifier);
 
     if (!user) return reply.code(401).send({ error: 'Invalid credentials' });
     const ok = await bcrypt.compare(password, user.passwordHash);
@@ -227,7 +245,7 @@ export async function authRoutes(app: FastifyInstance) {
     const parsed = forgotPasswordSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
 
-    const cleanEmail = normalizeEmail(parsed.data.email);
+    const cleanIdentifier = parsed.data.identifier.trim();
     const exposeDebugDetails = process.env.NODE_ENV !== 'production' && process.env.PASSWORD_RESET_DEBUG !== 'false';
     const genericResponse: {
       ok: boolean;
@@ -243,13 +261,13 @@ export async function authRoutes(app: FastifyInstance) {
       };
     } = {
       ok: true,
-      message: 'Si el correo existe, te enviamos instrucciones para restablecer tu contraseña.',
+      message: 'Si la cuenta existe, te enviamos instrucciones para restablecer tu contraseña.',
     };
 
-    const user = await prisma.user.findFirst({
+    let user = await prisma.user.findFirst({
       where: {
         email: {
-          equals: cleanEmail,
+          equals: normalizeEmail(cleanIdentifier),
           mode: 'insensitive',
         },
       },
@@ -259,6 +277,20 @@ export async function authRoutes(app: FastifyInstance) {
         fullName: true,
       },
     });
+
+    if (!user) {
+      const nationalIdCandidate = normalizeNationalId(cleanIdentifier);
+      if (nationalIdCandidate.length >= 5) {
+        user = await prisma.user.findFirst({
+          where: { nationalId: nationalIdCandidate },
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+          },
+        });
+      }
+    }
 
     if (!user) {
       if (exposeDebugDetails) {

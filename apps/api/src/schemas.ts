@@ -19,12 +19,12 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  identifier: z.string().min(3), // correo o cédula
+  identifier: z.string().min(3), // correo, cédula o usuario
   password: z.string().min(6).max(72),
 });
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().email(),
+  identifier: z.string().min(3),
 });
 
 export const resetPasswordSchema = z.object({

@@ -100,6 +100,14 @@ function parseCsvDateValue(raw: string) {
   return parsedCostaRica;
 }
 
+function escapeCsvCell(value: string | null | undefined) {
+  const text = (value ?? '').replace(/\r?\n/g, ' ').trim();
+  if (text.includes(',') || text.includes('"')) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
 function parseMatchesCsv(csvContent: string) {
   const lines = csvContent
     .replace(/^\uFEFF/, '')
@@ -1156,6 +1164,71 @@ export async function leagueRoutes(app: FastifyInstance) {
         errorRows: errors.length,
       },
       errors: errors.slice(0, 40),
+    });
+  });
+
+  // OWNER o SUPERADMIN: exportar partidos en CSV
+  app.get('/leagues/:id/matches/export-csv', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const uid = (req.user as any).uid as string;
+    const leagueId = (req.params as any).id as string;
+
+    const league = await findActiveLeagueById(leagueId);
+    if (!league) return reply.code(404).send({ error: 'League not found' });
+
+    const membership = await prisma.leagueMember.findUnique({
+      where: { leagueId_userId: { leagueId, userId: uid } },
+    });
+
+    const canManage = membership?.role === 'OWNER' || isSuperadmin(req);
+    if (!canManage) return reply.code(403).send({ error: 'Forbidden' });
+
+    const matches = await prisma.match.findMany({
+      where: { leagueId },
+      include: {
+        homeTeam: { select: { name: true, code: true, logoUrl: true } },
+        awayTeam: { select: { name: true, code: true, logoUrl: true } },
+      },
+      orderBy: { kickoffAt: 'asc' },
+    });
+
+    const header = [
+      'homeTeam',
+      'awayTeam',
+      'kickoffAt',
+      'lockAt',
+      'group',
+      'homeCode',
+      'awayCode',
+      'homeLogoUrl',
+      'awayLogoUrl',
+    ].join(',');
+
+    const rows = matches.map((match) => {
+      const cells = [
+        match.homeTeam.name,
+        match.awayTeam.name,
+        match.kickoffAt.toISOString(),
+        match.lockAt.toISOString(),
+        match.groupName ?? '',
+        match.homeTeam.code ?? '',
+        match.awayTeam.code ?? '',
+        match.homeTeam.logoUrl ?? '',
+        match.awayTeam.logoUrl ?? '',
+      ];
+
+      return cells.map((cell) => escapeCsvCell(cell)).join(',');
+    });
+
+    const csvContent = [header, ...rows].join('\n');
+    const safeLeagueName = league.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'quiniela';
+
+    return reply.send({
+      fileName: `${safeLeagueName}-partidos.csv`,
+      csvContent,
+      summary: { matches: matches.length },
     });
   });
 

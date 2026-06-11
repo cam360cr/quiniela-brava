@@ -161,6 +161,18 @@ function fileToText(file: File): Promise<string> {
   });
 }
 
+function downloadCsv(csvContent: string, fileName: string) {
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 function formatDate(value: string | null) {
   if (!value) return '-';
   const date = new Date(value);
@@ -300,6 +312,7 @@ export default function AdminPage() {
   const [csvContent, setCsvContent] = useState('');
   const [csvFileName, setCsvFileName] = useState('');
   const [importingCsv, setImportingCsv] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
   const [showLeagueEditor, setShowLeagueEditor] = useState(false);
 
   function openInvoicePreview(src: string, userLabel: string) {
@@ -834,6 +847,25 @@ export default function AdminPage() {
     }
   }
 
+  async function exportMatchesToCsv() {
+    if (exportingCsv) return;
+    if (!leagueId) throw new Error('Selecciona una quiniela');
+
+    setMsg(null);
+    setExportingCsv(true);
+
+    try {
+      const response = await apiFetch<{ fileName: string; csvContent: string; summary: { matches: number } }>(`/leagues/${leagueId}/matches/export-csv`);
+      const fileName = response.fileName || 'partidos.csv';
+      downloadCsv(response.csvContent || '', fileName);
+      setMsg(`Exportación lista: ${response.summary.matches} partidos descargados.`);
+    } catch (e: any) {
+      setMsg(e?.message ?? 'No se pudo exportar el CSV');
+    } finally {
+      setExportingCsv(false);
+    }
+  }
+
   async function bulkDeleteUsers() {
     if (bulkDeletingUsers || selectedUserIds.length === 0) return;
 
@@ -1330,6 +1362,9 @@ export default function AdminPage() {
             <div className="admin-dashboard-actions">
               <button className="btn primary" onClick={() => setShowCsvPanel((value) => !value)}>
                 Importar CSV
+              </button>
+              <button className="btn" disabled={exportingCsv} onClick={exportMatchesToCsv}>
+                {exportingCsv ? 'Exportando...' : 'Exportar CSV'}
               </button>
               <button className="btn" onClick={clearMatchDashboard}>Limpiar</button>
               <button

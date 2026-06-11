@@ -316,6 +316,10 @@ h1,h2,h3{
   background:linear-gradient(180deg, rgba(122,26,26,.35), rgba(80,18,18,.2));
 }
 
+.register-submit-msg{
+  margin-top:14px;
+}
+
 .register-msg-success{
   border-color:#1f7f4a;
   background:linear-gradient(180deg, rgba(24,117,67,.32), rgba(16,74,42,.22));
@@ -1250,6 +1254,7 @@ h1,h2,h3{
   border:1px solid #3b3b3b;
   background:#1a1a1a;
   color:var(--text);
+  font-size:16px;
   transition:border-color .2s ease, box-shadow .2s ease, background .2s ease;
 }
 
