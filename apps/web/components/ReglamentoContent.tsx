@@ -45,8 +45,8 @@ export default function ReglamentoContent({ compact = false }: ReglamentoContent
         <p className="small" style={{ marginTop: 0 }}>Los puntos se asignarán de la siguiente manera:</p>
         <ul className="rules-list small">
           <li>Marcador exacto acertado: 3 puntos.</li>
-          <li>Empate acertado, aunque el marcador no sea exacto: 1 punto.</li>
           <li>Ganador del partido acertado: 1 punto.</li>
+          <li>Si el partido termina empatado y se acierta el empate sin marcar el resultado exacto: 1 punto.</li>
         </ul>
 
         <div className="rules-example-grid">
@@ -60,15 +60,22 @@ export default function ReglamentoContent({ compact = false }: ReglamentoContent
           <div className="rules-example">
             <div className="small"><b>Ejemplo 2</b></div>
             <div className="small">Predicción: Argentina 3 - 1 Brasil</div>
-            <div className="small">Resultado final: Argentina 2 - 1 Brasil</div>
+            <div className="small">Resultado final: Argentina 2 - 0 Brasil</div>
             <div className="small"><b>= 1 punto (acertó el ganador)</b></div>
           </div>
 
           <div className="rules-example">
             <div className="small"><b>Ejemplo 3</b></div>
+            <div className="small">Predicción: Argentina 1 - 1 Brasil</div>
+            <div className="small">Resultado final: Argentina 2 - 1 Brasil</div>
+            <div className="small"><b>= 0 puntos</b></div>
+          </div>
+
+          <div className="rules-example">
+            <div className="small"><b>Ejemplo 4</b></div>
             <div className="small">Predicción: Argentina 3 - 3 Brasil</div>
             <div className="small">Resultado final: Argentina 1 - 1 Brasil</div>
-            <div className="small"><b>= 1 punto (acertó que empataban)</b></div>
+            <div className="small"><b>= 1 punto (acertó el empate)</b></div>
           </div>
         </div>
 
