@@ -32,6 +32,10 @@ export const resetPasswordSchema = z.object({
   password: z.string().min(6).max(72),
 });
 
+export const adminResetUserPasswordSchema = z.object({
+  password: z.string().min(6).max(72),
+});
+
 export const updateProfileSchema = z.object({
   email: z.string().email().optional(),
   username: z.string().min(3).max(30).regex(/^@?[A-Za-z0-9._]+$/).optional(),

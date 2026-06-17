@@ -69,6 +69,10 @@ export default function AdminUserProfilePage({ params }: { params: { id: string 
   const [user, setUser] = useState<AdminUserDetail | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [invoicePreview, setInvoicePreview] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!me || me.role !== 'SUPERADMIN') return;
@@ -76,6 +80,36 @@ export default function AdminUserProfilePage({ params }: { params: { id: string 
       .then((r) => setUser(r.user))
       .catch((e) => setMsg(e.message));
   }, [me?.id, me?.role, userId]);
+
+  async function handleChangePassword(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPasswordMsg(null);
+
+    if (newPassword.length < 6) {
+      setPasswordMsg('La contrasena debe tener al menos 6 caracteres.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordMsg('La confirmacion de contrasena no coincide.');
+      return;
+    }
+
+    try {
+      setPasswordBusy(true);
+      const response = await apiFetch<{ ok: boolean; message?: string }>(`/admin/users/${userId}/password`, {
+        method: 'POST',
+        body: JSON.stringify({ password: newPassword }),
+      });
+      setPasswordMsg(response.message || 'Contrasena actualizada correctamente.');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error: any) {
+      setPasswordMsg(error?.message || 'No se pudo actualizar la contrasena.');
+    } finally {
+      setPasswordBusy(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -148,6 +182,51 @@ export default function AdminUserProfilePage({ params }: { params: { id: string 
                 <div><b>Quinielas creadas:</b> {user._count.createdLeagues}</div>
                 <div><b>Pronósticos:</b> {user._count.predictions}</div>
               </div>
+            </div>
+
+            <div className="card">
+              <h3 style={{ marginTop: 0 }}>Cambiar contrasena</h3>
+              <p className="small" style={{ marginTop: 0 }}>
+                Esta accion reemplaza la contrasena actual del usuario @{user.username}.
+              </p>
+              <form onSubmit={handleChangePassword}>
+                <div className="grid cols2">
+                  <div>
+                    <label htmlFor="newPassword"><b>Nueva contrasena</b></label>
+                    <input
+                      id="newPassword"
+                      className="input"
+                      type="password"
+                      minLength={6}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="confirmPassword"><b>Confirmar contrasena</b></label>
+                    <input
+                      id="confirmPassword"
+                      className="input"
+                      type="password"
+                      minLength={6}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="row-actions" style={{ marginTop: 12 }}>
+                  <button className="btn" type="submit" disabled={passwordBusy}>
+                    {passwordBusy ? 'Guardando...' : 'Actualizar contrasena'}
+                  </button>
+                </div>
+                {passwordMsg && (
+                  <p className="small" style={{ marginBottom: 0 }}>
+                    {passwordMsg}
+                  </p>
+                )}
+              </form>
             </div>
 
             <div className="card">

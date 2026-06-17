@@ -238,7 +238,9 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
 
   const now = Date.now();
   const openMatches = matches.filter((m) => new Date(m.lockAt).getTime() > now);
-  const closedMatches = matches.filter((m) => new Date(m.lockAt).getTime() <= now);
+  const closedMatches = [...matches]
+    .filter((m) => new Date(m.lockAt).getTime() <= now)
+    .sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime());
   const openMatchesWithoutPrediction = openMatches.filter((m) => {
     const savedHome = (savedPredHome[m.id] ?? '').trim();
     const savedAway = (savedPredAway[m.id] ?? '').trim();
@@ -251,7 +253,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
   });
   const visibleMatches =
     matchesTab === 'all'
-      ? matches
+      ? openMatches
       : matchesTab === 'without-prediction'
       ? openMatchesWithoutPrediction
       : matchesTab === 'predicted'
@@ -811,7 +813,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
             <h3 style={{ marginTop: 0, marginBottom: 0 }}>Mis partidos</h3>
             <div className="row-actions">
               <button className={`btn ${matchesTab === 'all' ? 'primary' : ''}`} onClick={() => setMatchesTab('all')}>
-                Todos ({matches.length})
+                Abiertos ({openMatches.length})
               </button>
               <button className={`btn ${matchesTab === 'without-prediction' ? 'primary' : ''}`} onClick={() => setMatchesTab('without-prediction')}>
                 Sin pronosticar ({openMatchesWithoutPrediction.length})
