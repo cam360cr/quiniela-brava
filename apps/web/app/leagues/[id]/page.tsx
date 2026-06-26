@@ -13,9 +13,10 @@ type MatchItem = {
   lockAt: string;
   finalHome: number | null;
   finalAway: number | null;
+  finalPenaltyWinnerIsHome: boolean | null;
   homeTeam: { name: string; logoUrl?: string | null };
   awayTeam: { name: string; logoUrl?: string | null };
-  myPrediction: { predHome: number; predAway: number; points: number | null } | null;
+  myPrediction: { predHome: number; predAway: number; predPenaltyWinnerIsHome: boolean | null; points: number | null } | null;
 };
 
 type LeagueTeam = {
@@ -51,6 +52,7 @@ type BulkPredictionResponse = {
     matchId: string;
     predHome: number;
     predAway: number;
+    predPenaltyWinnerIsHome: boolean | null;
     points: number | null;
   }>;
   failed: Array<{
@@ -75,6 +77,23 @@ function parseScoreInput(raw: string, label: string) {
   }
 
   return n;
+}
+
+function parsePenaltyWinnerInput(raw: string) {
+  if (raw === '') return null;
+  if (raw === 'home') return true;
+  if (raw === 'away') return false;
+  return null;
+}
+
+function penaltyWinnerInput(value: boolean | null | undefined) {
+  if (value === true) return 'home';
+  if (value === false) return 'away';
+  return '';
+}
+
+function isDrawScore(home: string, away: string) {
+  return home !== '' && away !== '' && home === away;
 }
 
 function dateLabel(value: string) {
@@ -106,13 +125,17 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
 
   const [predHome, setPredHome] = useState<Record<string, string>>({});
   const [predAway, setPredAway] = useState<Record<string, string>>({});
+  const [predPenaltyWinner, setPredPenaltyWinner] = useState<Record<string, string>>({});
   const [savedPredHome, setSavedPredHome] = useState<Record<string, string>>({});
   const [savedPredAway, setSavedPredAway] = useState<Record<string, string>>({});
+  const [savedPredPenaltyWinner, setSavedPredPenaltyWinner] = useState<Record<string, string>>({});
   const [predictionSaveErrors, setPredictionSaveErrors] = useState<PredictionSaveErrorMap>({});
   const [savingPredictions, setSavingPredictions] = useState(false);
   const [savingPredictionIds, setSavingPredictionIds] = useState<Record<string, true>>({});
   const [resultHome, setResultHome] = useState<Record<string, string>>({});
   const [resultAway, setResultAway] = useState<Record<string, string>>({});
+  const [resultPenaltyWinner, setResultPenaltyWinner] = useState<Record<string, string>>({});
+  const [savedResultPenaltyWinner, setSavedResultPenaltyWinner] = useState<Record<string, string>>({});
 
   const [leagueTeams, setLeagueTeams] = useState<LeagueTeam[]>([]);
   const [teamImages, setTeamImages] = useState<string[]>([]);
@@ -136,27 +159,35 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
 
     const ph: Record<string, string> = {};
     const pa: Record<string, string> = {};
+    const pp: Record<string, string> = {};
     const rh: Record<string, string> = {};
     const ra: Record<string, string> = {};
+    const rp: Record<string, string> = {};
 
     r.matches.forEach((m) => {
       if (m.myPrediction) {
         ph[m.id] = String(m.myPrediction.predHome);
         pa[m.id] = String(m.myPrediction.predAway);
+        pp[m.id] = penaltyWinnerInput(m.myPrediction.predPenaltyWinnerIsHome);
       }
       if (m.finalHome !== null && m.finalAway !== null) {
         rh[m.id] = String(m.finalHome);
         ra[m.id] = String(m.finalAway);
+        rp[m.id] = penaltyWinnerInput(m.finalPenaltyWinnerIsHome);
       }
     });
 
     setPredHome(ph);
     setPredAway(pa);
+    setPredPenaltyWinner(pp);
     setSavedPredHome(ph);
     setSavedPredAway(pa);
+    setSavedPredPenaltyWinner(pp);
     setPredictionSaveErrors({});
     setResultHome(rh);
     setResultAway(ra);
+    setResultPenaltyWinner(rp);
+    setSavedResultPenaltyWinner(rp);
   }
 
   async function loadLeagueTeams() {
@@ -269,10 +300,16 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
         const currentAway = (predAway[m.id] ?? '').trim();
         const savedHome = (savedPredHome[m.id] ?? '').trim();
         const savedAway = (savedPredAway[m.id] ?? '').trim();
-        return currentHome !== savedHome || currentAway !== savedAway;
+        if (currentHome !== savedHome || currentAway !== savedAway) return true;
+
+        if (!isDrawScore(currentHome, currentAway)) return false;
+
+        const currentPenaltyWinnerValue = (predPenaltyWinner[m.id] ?? '').trim();
+        const savedPenaltyWinnerValue = (savedPredPenaltyWinner[m.id] ?? '').trim();
+        return currentPenaltyWinnerValue !== savedPenaltyWinnerValue;
       })
       .map((m) => m.id);
-  }, [matches, predHome, predAway, savedPredHome, savedPredAway]);
+  }, [matches, predHome, predAway, predPenaltyWinner, savedPredHome, savedPredAway, savedPredPenaltyWinner]);
 
   const pendingPredictionSet = useMemo(() => new Set(pendingPredictionIds), [pendingPredictionIds]);
 
@@ -294,6 +331,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
   function discardPendingPredictions() {
     setPredHome(savedPredHome);
     setPredAway(savedPredAway);
+    setPredPenaltyWinner(savedPredPenaltyWinner);
     clearPredictionErrors();
     setMsg('Cambios descartados.');
   }
@@ -306,7 +344,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
     setSavingPredictions(true);
 
     const localFailed: Array<{ matchId: string; error: string; code: string }> = [];
-    const payload: Array<{ matchId: string; predHome: number; predAway: number }> = [];
+    const payload: Array<{ matchId: string; predHome: number; predAway: number; predPenaltyWinnerIsHome: boolean | null }> = [];
 
     for (const matchId of pendingPredictionIds) {
       const match = matchById.get(matchId);
@@ -324,10 +362,14 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
       try {
         const predHomeValue = parseScoreInput(predHome[matchId] ?? '', 'Pronóstico local');
         const predAwayValue = parseScoreInput(predAway[matchId] ?? '', 'Pronóstico visitante');
+        const penaltyWinnerValue = isDrawScore(String(predHomeValue), String(predAwayValue))
+          ? parsePenaltyWinnerInput(predPenaltyWinner[matchId] ?? '')
+          : null;
         payload.push({
           matchId,
           predHome: predHomeValue,
           predAway: predAwayValue,
+          predPenaltyWinnerIsHome: penaltyWinnerValue,
         });
       } catch (error: any) {
         localFailed.push({
@@ -375,6 +417,14 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
           return next;
         });
 
+        setSavedPredPenaltyWinner((prev) => {
+          const next = { ...prev };
+          backendSaved.forEach((item) => {
+            next[item.matchId] = penaltyWinnerInput(item.predPenaltyWinnerIsHome);
+          });
+          return next;
+        });
+
         setMatches((prev) => prev.map((match) => {
           const saved = savedMap.get(match.id);
           if (!saved) return match;
@@ -383,6 +433,7 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
             myPrediction: {
               predHome: saved.predHome,
               predAway: saved.predAway,
+              predPenaltyWinnerIsHome: saved.predPenaltyWinnerIsHome,
               points: saved.points,
             },
           };
@@ -812,6 +863,9 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
           <div className="row-actions" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
             <h3 style={{ marginTop: 0, marginBottom: 0 }}>Mis partidos</h3>
             <div className="row-actions">
+              <Link className="btn" href="/reglamento#puntaje">
+                Ver reglamento de puntaje y penales
+              </Link>
               <button className={`btn ${matchesTab === 'all' ? 'primary' : ''}`} onClick={() => setMatchesTab('all')}>
                 Abiertos ({openMatches.length})
               </button>
@@ -851,11 +905,16 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                 const currentPredAway = (predAway[m.id] ?? '').trim();
                 const savedPredHomeValue = (savedPredHome[m.id] ?? '').trim();
                 const savedPredAwayValue = (savedPredAway[m.id] ?? '').trim();
+                const currentPredDraw = isDrawScore(currentPredHome, currentPredAway);
+                const isPenaltyEligibleMatch = new Date(m.kickoffAt).getTime() >= new Date('2026-06-28').getTime();
+                const currentPredPenaltyWinnerValue = currentPredDraw && isPenaltyEligibleMatch ? (predPenaltyWinner[m.id] ?? '').trim() : '';
+                const savedPredPenaltyWinnerValue = (savedPredPenaltyWinner[m.id] ?? '').trim();
                 const predictionSaved =
                   savedPredHomeValue !== ''
                   && savedPredAwayValue !== ''
                   && currentPredHome === savedPredHomeValue
-                  && currentPredAway === savedPredAwayValue;
+                  && currentPredAway === savedPredAwayValue
+                  && (!currentPredDraw || currentPredPenaltyWinnerValue === savedPredPenaltyWinnerValue);
                 const predictionDirty = pendingPredictionSet.has(m.id);
                 const hasSavedPrediction = savedPredHomeValue !== '' && savedPredAwayValue !== '';
                 const predictionStatusLabel = locked
@@ -878,8 +937,18 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                 const currentResultAway = (resultAway[m.id] ?? '').trim();
                 const savedResultHome = m.finalHome === null ? '' : String(m.finalHome);
                 const savedResultAway = m.finalAway === null ? '' : String(m.finalAway);
-                const resultSaved = m.finalHome !== null && m.finalAway !== null && currentResultHome === savedResultHome && currentResultAway === savedResultAway;
-                const resultDirty = currentResultHome !== savedResultHome || currentResultAway !== savedResultAway;
+                const currentResultDraw = isDrawScore(currentResultHome, currentResultAway);
+                const isResultPenaltyEligible = new Date(m.kickoffAt).getTime() >= new Date('2026-06-28').getTime();
+                const currentResultPenaltyWinnerValue = currentResultDraw && isResultPenaltyEligible ? (resultPenaltyWinner[m.id] ?? '').trim() : '';
+                const savedResultPenaltyWinnerValue = (savedResultPenaltyWinner[m.id] ?? '').trim();
+                const finalPenaltyWinnerName =
+                  m.finalPenaltyWinnerIsHome === null
+                    ? null
+                    : m.finalPenaltyWinnerIsHome
+                      ? toSpanishTeamName(m.homeTeam.name)
+                      : toSpanishTeamName(m.awayTeam.name);
+                const resultSaved = m.finalHome !== null && m.finalAway !== null && currentResultHome === savedResultHome && currentResultAway === savedResultAway && (!currentResultDraw || currentResultPenaltyWinnerValue === savedResultPenaltyWinnerValue);
+                const resultDirty = currentResultHome !== savedResultHome || currentResultAway !== savedResultAway || (currentResultDraw && currentResultPenaltyWinnerValue !== savedResultPenaltyWinnerValue);
 
                 return (
                   <article key={m.id} className="qb-match-row">
@@ -946,6 +1015,21 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                           }}
                         />
                       </div>
+                      {currentPredDraw && isPenaltyEligibleMatch && (
+                        <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
+                          <select
+                            className="input"
+                            style={{ width: '100%', maxWidth: 220 }}
+                            value={predPenaltyWinner[m.id] ?? ''}
+                            onChange={(e) => setPredPenaltyWinner((s) => ({ ...s, [m.id]: e.target.value }))}
+                            disabled={locked || savingPredictions || !!savingPredictionIds[m.id]}
+                          >
+                            <option value="">Ganador en penales</option>
+                            <option value="home">Gana {toSpanishTeamName(m.homeTeam.name)} en penales</option>
+                            <option value="away">Gana {toSpanishTeamName(m.awayTeam.name)} en penales</option>
+                          </select>
+                        </div>
+                      )}
                       {predictionError && <div className="small qb-inline-error">{predictionError}</div>}
                     </div>
 
@@ -967,6 +1051,30 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                               onChange={(e) => setResultAway((s) => ({ ...s, [m.id]: e.target.value }))}
                             />
                           </div>
+                          {isResultPenaltyEligible && !currentResultDraw && (
+                            <div className="small" style={{ marginTop: 8, textAlign: 'center' }}>
+                              Para elegir penales, primero ingresa un empate en el resultado final.
+                            </div>
+                          )}
+                          {currentResultDraw && isResultPenaltyEligible && (
+                            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
+                              <select
+                                className="input"
+                                style={{ width: '100%', maxWidth: 220 }}
+                                value={resultPenaltyWinner[m.id] ?? ''}
+                                onChange={(e) => setResultPenaltyWinner((s) => ({ ...s, [m.id]: e.target.value }))}
+                              >
+                                <option value="">Ganador en penales</option>
+                                <option value="home">Gana {toSpanishTeamName(m.homeTeam.name)} en penales</option>
+                                <option value="away">Gana {toSpanishTeamName(m.awayTeam.name)} en penales</option>
+                              </select>
+                            </div>
+                          )}
+                          {m.finalHome !== null && m.finalAway !== null && m.finalHome === m.finalAway && finalPenaltyWinnerName && (
+                            <div className="small" style={{ marginTop: 6, textAlign: 'center' }}>
+                              Penales: ganó {finalPenaltyWinnerName}
+                            </div>
+                          )}
                           <div className="row-actions qb-save-row" style={{ marginTop: 8 }}>
                             <button
                               className="btn green"
@@ -975,9 +1083,10 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                                 try {
                                   const fh = parseScoreInput(resultHome[m.id] ?? '', 'Resultado local');
                                   const fa = parseScoreInput(resultAway[m.id] ?? '', 'Resultado visitante');
+                                  const penaltyWinner = isDrawScore(String(fh), String(fa)) ? parsePenaltyWinnerInput(resultPenaltyWinner[m.id] ?? '') : null;
                                   await apiFetch(`/leagues/${leagueId}/matches/${m.id}/result`, {
                                     method: 'PATCH',
-                                    body: JSON.stringify({ finalHome: fh, finalAway: fa }),
+                                    body: JSON.stringify({ finalHome: fh, finalAway: fa, finalPenaltyWinnerIsHome: penaltyWinner }),
                                   });
                                   await load();
                                 } catch (e: any) {
@@ -990,7 +1099,12 @@ export default function LeaguePage({ params }: { params: { id: string } }) {
                           </div>
                         </div>
                       ) : (
-                        <div className="qb-result-pill">{m.finalHome === null ? '-' : `${m.finalHome} - ${m.finalAway}`}</div>
+                        <div style={{ display: 'grid', gap: 6, justifyItems: 'center' }}>
+                          <div className="qb-result-pill">{m.finalHome === null ? '-' : `${m.finalHome} - ${m.finalAway}`}</div>
+                          {m.finalHome !== null && m.finalAway !== null && m.finalHome === m.finalAway && finalPenaltyWinnerName && (
+                            <div className="small">Penales: ganó {finalPenaltyWinnerName}</div>
+                          )}
+                        </div>
                       )}
                     </div>
 

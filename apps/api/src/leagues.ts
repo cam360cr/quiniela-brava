@@ -295,6 +295,7 @@ type UpsertPredictionInput = {
   matchId: string;
   predHome: number;
   predAway: number;
+  predPenaltyWinnerIsHome?: boolean | null;
 };
 
 type UpsertPredictionResult =
@@ -302,7 +303,7 @@ type UpsertPredictionResult =
   | { ok: false; status: number; code: 'MATCH_NOT_IN_LEAGUE' | 'PREDICTION_LOCKED'; error: string; matchId: string };
 
 async function upsertLeaguePrediction(input: UpsertPredictionInput): Promise<UpsertPredictionResult> {
-  const { leagueId, userId, matchId, predHome, predAway } = input;
+  const { leagueId, userId, matchId, predHome, predAway, predPenaltyWinnerIsHome } = input;
 
   const match = await prisma.match.findUnique({ where: { id: matchId } });
   if (!match || match.leagueId !== leagueId) {
@@ -315,13 +316,20 @@ async function upsertLeaguePrediction(input: UpsertPredictionInput): Promise<Ups
 
   const points =
     match.finalHome !== null && match.finalAway !== null
-      ? calcPoints(predHome, predAway, match.finalHome, match.finalAway)
+      ? calcPoints(
+          predHome,
+          predAway,
+          match.finalHome,
+          match.finalAway,
+          predPenaltyWinnerIsHome ?? null,
+          match.finalPenaltyWinnerIsHome ?? null
+        )
       : null;
 
   const prediction = await prisma.prediction.upsert({
     where: { leagueId_userId_matchId: { leagueId, userId, matchId } },
-    update: { predHome, predAway, points },
-    create: { leagueId, userId, matchId, predHome, predAway, points },
+    update: { predHome, predAway, predPenaltyWinnerIsHome: predPenaltyWinnerIsHome ?? null, points },
+    create: { leagueId, userId, matchId, predHome, predAway, predPenaltyWinnerIsHome: predPenaltyWinnerIsHome ?? null, points },
   });
 
   return { ok: true, prediction };
@@ -999,7 +1007,7 @@ export async function leagueRoutes(app: FastifyInstance) {
 
     const preds = await prisma.prediction.findMany({
       where: { leagueId: id, userId: uid },
-      select: { matchId: true, predHome: true, predAway: true, points: true },
+      select: { matchId: true, predHome: true, predAway: true, predPenaltyWinnerIsHome: true, points: true },
     });
 
     const predMap = new Map(preds.map(p => [p.matchId, p]));
@@ -1403,7 +1411,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     const league = await findActiveLeagueById(leagueId);
     if (!league) return reply.code(404).send({ error: 'League not found' });
 
-    const { matchId, predHome, predAway } = parsed.data;
+    const { matchId, predHome, predAway, predPenaltyWinnerIsHome } = parsed.data;
 
     const result = await upsertLeaguePrediction({
       leagueId: league.id,
@@ -1411,6 +1419,7 @@ export async function leagueRoutes(app: FastifyInstance) {
       matchId,
       predHome,
       predAway,
+      predPenaltyWinnerIsHome: predPenaltyWinnerIsHome ?? null,
     });
 
     if (!result.ok) {
@@ -1440,7 +1449,7 @@ export async function leagueRoutes(app: FastifyInstance) {
     if (!league) return reply.code(404).send({ error: 'League not found' });
 
     // Keep last edit for repeated match IDs.
-    const byMatch = new Map<string, { matchId: string; predHome: number; predAway: number }>();
+    const byMatch = new Map<string, { matchId: string; predHome: number; predAway: number; predPenaltyWinnerIsHome?: boolean | null }>();
     incomingPredictions.forEach((item) => {
       byMatch.set(item.matchId, item);
     });
@@ -1456,6 +1465,7 @@ export async function leagueRoutes(app: FastifyInstance) {
         matchId: item.matchId,
         predHome: item.predHome,
         predAway: item.predAway,
+        predPenaltyWinnerIsHome: item.predPenaltyWinnerIsHome ?? null,
       });
 
       if (result.ok) {
@@ -1539,11 +1549,11 @@ export async function leagueRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: 'Match not found in this league' });
     }
 
-    const { finalHome, finalAway } = parsed.data;
+    const { finalHome, finalAway, finalPenaltyWinnerIsHome } = parsed.data;
 
     const match = await prisma.match.update({
       where: { id: matchId },
-      data: { finalHome, finalAway },
+      data: { finalHome, finalAway, finalPenaltyWinnerIsHome: finalPenaltyWinnerIsHome ?? null },
     });
 
     // find all predictions for this match across all leagues
@@ -1555,7 +1565,10 @@ export async function leagueRoutes(app: FastifyInstance) {
     const updates = preds.map(p => {
       const pts = calcPoints(
         p.predHome, p.predAway,
-        finalHome, finalAway
+        finalHome,
+        finalAway,
+        p.predPenaltyWinnerIsHome ?? null,
+        finalPenaltyWinnerIsHome ?? null
       );
       return prisma.prediction.update({ where: { id: p.id }, data: { points: pts } });
     });
