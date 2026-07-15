@@ -24,6 +24,21 @@ type CsvImportError = {
   message: string;
 };
 
+type CsvImportDuplicate = {
+  row: number;
+  homeTeam: string;
+  awayTeam: string;
+  kickoffAt: string;
+  reason: 'existing_match' | 'duplicate_in_csv' | 'duplicate_during_import';
+};
+
+type CsvImportAccepted = {
+  row: number;
+  homeTeam: string;
+  awayTeam: string;
+  kickoffAt: string;
+};
+
 function parseCsvLine(line: string) {
   const cells: string[] = [];
   let current = '';
@@ -217,46 +232,13 @@ async function findOrCreateTeamForCsvImport(params: {
   });
 
   if (byName) {
-    let nextCode = byName.code;
-
-    if (normalizedCode && byName.code !== normalizedCode) {
-      const codeOwner = await prisma.team.findFirst({ where: { leagueId, code: normalizedCode } });
-      if (!codeOwner || codeOwner.id === byName.id) {
-        nextCode = normalizedCode;
-      }
-    }
-
-    const nextLogo = normalizedLogo || byName.logoUrl;
-    const requiresUpdate = byName.name !== normalizedName || byName.code !== nextCode || byName.logoUrl !== nextLogo;
-
-    if (!requiresUpdate) {
-      return { team: byName, created: false, updated: false };
-    }
-
-    const updatedTeam = await prisma.team.update({
-      where: { id: byName.id },
-      data: {
-        name: normalizedName,
-        code: nextCode,
-        logoUrl: nextLogo,
-      },
-    });
-
-    return { team: updatedTeam, created: false, updated: true };
+    return { team: byName, created: false, updated: false };
   }
 
   if (normalizedCode) {
     const byCode = await prisma.team.findFirst({ where: { leagueId, code: normalizedCode } });
     if (byCode) {
-      const updatedTeam = await prisma.team.update({
-        where: { id: byCode.id },
-        data: {
-          name: normalizedName,
-          logoUrl: normalizedLogo || byCode.logoUrl,
-        },
-      });
-
-      return { team: updatedTeam, created: false, updated: true };
+      return { team: byCode, created: false, updated: false };
     }
   }
 
@@ -270,6 +252,14 @@ async function findOrCreateTeamForCsvImport(params: {
   });
 
   return { team: createdTeam, created: true, updated: false };
+}
+
+function normalizeTeamImportKey(name: string) {
+  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function makeImportMatchKey(homeTeam: string, awayTeam: string, kickoffAt: Date) {
+  return `${normalizeTeamImportKey(homeTeam)}|${normalizeTeamImportKey(awayTeam)}|${kickoffAt.toISOString()}`;
 }
 
 function isSuperadmin(req: any) {
@@ -1106,45 +1096,105 @@ export async function leagueRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: error?.message ?? 'CSV inválido' });
     }
 
-    let createdTeams = 0;
-    let updatedTeams = 0;
-    let createdMatches = 0;
-    let updatedMatches = 0;
-    let unchangedMatches = 0;
-
     const errors = [...parsedCsv.errors];
+    const confirmImport = parsed.data.confirmImport === true;
+
+    const existingMatches = await prisma.match.findMany({
+      where: { leagueId },
+      include: {
+        homeTeam: { select: { name: true } },
+        awayTeam: { select: { name: true } },
+      },
+    });
+
+    const existingMatchKeys = new Set(
+      existingMatches.map((match) => makeImportMatchKey(match.homeTeam.name, match.awayTeam.name, match.kickoffAt))
+    );
+
+    const acceptedRows: CsvImportAccepted[] = [];
+    const duplicateRows: CsvImportDuplicate[] = [];
+    const seenCsvKeys = new Set<string>();
+    const rowsToCreate = [] as CsvMatchRow[];
 
     for (const row of parsedCsv.rows) {
-      try {
-        const homeResult = await findOrCreateTeamForCsvImport({
-          leagueId,
-          name: row.homeTeam,
-          code: row.homeCode,
-          logoUrl: row.homeLogoUrl,
+      const rowKey = makeImportMatchKey(row.homeTeam, row.awayTeam, row.kickoffAt);
+      const kickoffIso = row.kickoffAt.toISOString();
+
+      if (existingMatchKeys.has(rowKey)) {
+        duplicateRows.push({
+          row: row.rowNumber,
+          homeTeam: row.homeTeam,
+          awayTeam: row.awayTeam,
+          kickoffAt: kickoffIso,
+          reason: 'existing_match',
         });
+        continue;
+      }
 
-        const awayResult = await findOrCreateTeamForCsvImport({
-          leagueId,
-          name: row.awayTeam,
-          code: row.awayCode,
-          logoUrl: row.awayLogoUrl,
+      if (seenCsvKeys.has(rowKey)) {
+        duplicateRows.push({
+          row: row.rowNumber,
+          homeTeam: row.homeTeam,
+          awayTeam: row.awayTeam,
+          kickoffAt: kickoffIso,
+          reason: 'duplicate_in_csv',
         });
+        continue;
+      }
 
-        if (homeResult.created) createdTeams += 1;
-        if (awayResult.created) createdTeams += 1;
-        if (homeResult.updated) updatedTeams += 1;
-        if (awayResult.updated) updatedTeams += 1;
+      seenCsvKeys.add(rowKey);
+      acceptedRows.push({
+        row: row.rowNumber,
+        homeTeam: row.homeTeam,
+        awayTeam: row.awayTeam,
+        kickoffAt: kickoffIso,
+      });
+      rowsToCreate.push(row);
+    }
 
-        const existing = await prisma.match.findFirst({
-          where: {
+    let createdTeams = 0;
+    let createdMatches = 0;
+
+    if (confirmImport) {
+      for (const row of rowsToCreate) {
+        try {
+          const homeResult = await findOrCreateTeamForCsvImport({
             leagueId,
-            homeTeamId: homeResult.team.id,
-            awayTeamId: awayResult.team.id,
-            kickoffAt: row.kickoffAt,
-          },
-        });
+            name: row.homeTeam,
+            code: row.homeCode,
+            logoUrl: row.homeLogoUrl,
+          });
 
-        if (!existing) {
+          const awayResult = await findOrCreateTeamForCsvImport({
+            leagueId,
+            name: row.awayTeam,
+            code: row.awayCode,
+            logoUrl: row.awayLogoUrl,
+          });
+
+          if (homeResult.created) createdTeams += 1;
+          if (awayResult.created) createdTeams += 1;
+
+          const existing = await prisma.match.findFirst({
+            where: {
+              leagueId,
+              homeTeamId: homeResult.team.id,
+              awayTeamId: awayResult.team.id,
+              kickoffAt: row.kickoffAt,
+            },
+          });
+
+          if (existing) {
+            duplicateRows.push({
+              row: row.rowNumber,
+              homeTeam: row.homeTeam,
+              awayTeam: row.awayTeam,
+              kickoffAt: row.kickoffAt.toISOString(),
+              reason: 'duplicate_during_import',
+            });
+            continue;
+          }
+
           await prisma.match.create({
             data: {
               leagueId,
@@ -1156,42 +1206,28 @@ export async function leagueRoutes(app: FastifyInstance) {
             },
           });
           createdMatches += 1;
-          continue;
-        }
-
-        const lockChanged = existing.lockAt.getTime() !== row.lockAt.getTime();
-        const groupChanged = (existing.groupName ?? null) !== row.groupName;
-
-        if (lockChanged || groupChanged) {
-          await prisma.match.update({
-            where: { id: existing.id },
-            data: {
-              lockAt: row.lockAt,
-              groupName: row.groupName,
-            },
+        } catch (error: any) {
+          errors.push({
+            row: row.rowNumber,
+            message: error?.message ?? 'Error inesperado al importar fila',
           });
-          updatedMatches += 1;
-        } else {
-          unchangedMatches += 1;
         }
-      } catch (error: any) {
-        errors.push({
-          row: row.rowNumber,
-          message: error?.message ?? 'Error inesperado al importar fila',
-        });
       }
     }
 
     return reply.send({
+      mode: confirmImport ? 'imported' : 'preview',
       summary: {
         rowsReceived: parsedCsv.rows.length,
+        acceptedRows: acceptedRows.length,
+        duplicateRows: duplicateRows.length,
         createdTeams,
-        updatedTeams,
         createdMatches,
-        updatedMatches,
-        unchangedMatches,
         errorRows: errors.length,
+        requiresConfirmation: !confirmImport && acceptedRows.length > 0,
       },
+      acceptedRows: acceptedRows.slice(0, 200),
+      duplicateRows: duplicateRows.slice(0, 200),
       errors: errors.slice(0, 40),
     });
   });

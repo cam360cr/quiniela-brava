@@ -76,15 +76,29 @@ type BulkDeleteResponse = {
 };
 
 type CsvImportResponse = {
+  mode: 'preview' | 'imported';
   summary: {
     rowsReceived: number;
+    acceptedRows: number;
+    duplicateRows: number;
     createdTeams: number;
-    updatedTeams: number;
     createdMatches: number;
-    updatedMatches: number;
-    unchangedMatches: number;
     errorRows: number;
+    requiresConfirmation: boolean;
   };
+  acceptedRows: Array<{
+    row: number;
+    homeTeam: string;
+    awayTeam: string;
+    kickoffAt: string;
+  }>;
+  duplicateRows: Array<{
+    row: number;
+    homeTeam: string;
+    awayTeam: string;
+    kickoffAt: string;
+    reason: 'existing_match' | 'duplicate_in_csv' | 'duplicate_during_import';
+  }>;
   errors: Array<{
     row: number;
     message: string;
@@ -834,29 +848,86 @@ export default function AdminPage() {
       const content = csvContent.trim();
       if (!content) throw new Error('Debes cargar o pegar el contenido CSV');
 
-      const response = await apiFetch<CsvImportResponse>(`/leagues/${leagueId}/matches/import-csv`, {
+      const preview = await apiFetch<CsvImportResponse>(`/leagues/${leagueId}/matches/import-csv`, {
         method: 'POST',
-        body: JSON.stringify({ csvContent: content }),
+        body: JSON.stringify({ csvContent: content, confirmImport: false }),
       });
 
-      await Promise.all([loadMatches(leagueId), loadTeams(), loadCore()]);
-
-      const previewErrors = response.errors
+      const previewErrors = preview.errors
         .slice(0, 3)
         .map((item) => `fila ${item.row}: ${item.message}`)
         .join(' | ');
 
+      const previewDuplicates = preview.duplicateRows
+        .slice(0, 5)
+        .map((item) => `fila ${item.row}: ${item.homeTeam} vs ${item.awayTeam} (${formatMatchTime(item.kickoffAt)})`)
+        .join(' | ');
+
+      const previewAccepted = preview.acceptedRows
+        .slice(0, 5)
+        .map((item) => `fila ${item.row}: ${item.homeTeam} vs ${item.awayTeam} (${formatMatchTime(item.kickoffAt)})`)
+        .join(' | ');
+
+      let previewMessage =
+        `Previsualización: ${preview.summary.acceptedRows} por agregar, ` +
+        `${preview.summary.duplicateRows} repetidos, ` +
+        `${preview.summary.errorRows} con error.`;
+
+      if (previewDuplicates) {
+        previewMessage += ` Repetidos: ${previewDuplicates}`;
+      }
+
+      if (previewAccepted) {
+        previewMessage += ` Nuevos a subir: ${previewAccepted}`;
+      }
+
+      if (previewErrors) {
+        previewMessage += ` Errores: ${previewErrors}`;
+      }
+
+      if (!preview.summary.requiresConfirmation) {
+        setMsg(previewMessage);
+        return;
+      }
+
+      const confirmed = window.confirm(`${previewMessage}\n\n¿Confirmas subir solo los partidos nuevos?`);
+      if (!confirmed) {
+        setMsg('Importación cancelada por usuario. No se agregó ni reemplazó ningún partido.');
+        return;
+      }
+
+      const response = await apiFetch<CsvImportResponse>(`/leagues/${leagueId}/matches/import-csv`, {
+        method: 'POST',
+        body: JSON.stringify({ csvContent: content, confirmImport: true }),
+      });
+
+      await Promise.all([loadMatches(leagueId), loadTeams(), loadCore()]);
+
       let message =
         `Importación lista: ${response.summary.createdMatches} partidos nuevos, ` +
-        `${response.summary.updatedMatches} actualizados, ` +
+        `${response.summary.duplicateRows} repetidos omitidos, ` +
         `${response.summary.createdTeams} equipos nuevos.`;
 
       if (response.summary.errorRows > 0) {
         message += ` Filas con error: ${response.summary.errorRows}.`;
       }
 
-      if (previewErrors) {
-        message += ` Ejemplos: ${previewErrors}`;
+      const importDuplicates = response.duplicateRows
+        .slice(0, 3)
+        .map((item) => `fila ${item.row}: ${item.homeTeam} vs ${item.awayTeam}`)
+        .join(' | ');
+
+      const importErrors = response.errors
+        .slice(0, 3)
+        .map((item) => `fila ${item.row}: ${item.message}`)
+        .join(' | ');
+
+      if (importDuplicates) {
+        message += ` Repetidos: ${importDuplicates}.`;
+      }
+
+      if (importErrors) {
+        message += ` Errores: ${importErrors}`;
       }
 
       setMsg(message);
@@ -1574,6 +1645,7 @@ export default function AdminPage() {
             <div className="admin-dashboard-csv-panel">
               <div className="small" style={{ marginBottom: 8 }}>
                 Importa por CSV. Columnas mínimas: <b>homeTeam, awayTeam, kickoffAt</b>. Opcional: <b>lockAt, group, homeLogoUrl, awayLogoUrl</b>.
+                Esta importación no reemplaza ni borra partidos existentes.
               </div>
 
               <div className="admin-dashboard-csv-grid">
