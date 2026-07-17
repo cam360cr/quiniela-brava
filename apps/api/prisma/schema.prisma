@@ -141,6 +141,9 @@ model League {
   pointsOutcome Int @default(1)
   deletedAt     DateTime?
 
+  // Total real goals of the World Cup, entered manually by the admin for the goal-count tiebreaker.
+  actualWorldCupGoals Int?
+
   createdAt DateTime @default(now())
 
   members     LeagueMember[]

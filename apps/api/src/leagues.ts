@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from './prisma.js';
-import { adminLeagueTeamSchema, adminResetUserPasswordSchema, bulkDeleteSchema, bulkDeleteTeamsSchema, bulkPredictionsSchema, createLeagueSchema, createMatchSchema, importMatchesCsvSchema, joinLeagueSchema, predictionSchema, setResultSchema } from './schemas.js';
+import { adminLeagueTeamSchema, adminResetUserPasswordSchema, bulkDeleteSchema, bulkDeleteTeamsSchema, bulkPredictionsSchema, createLeagueSchema, createMatchSchema, importMatchesCsvSchema, joinLeagueSchema, predictionSchema, setActualWorldCupGoalsSchema, setResultSchema } from './schemas.js';
 import { makeJoinCode } from './utils.js';
 import { calcPoints, CORRECT_WINNER_POINTS, EXACT_SCORE_POINTS } from './points.js';
 
@@ -1567,6 +1567,77 @@ export async function leagueRoutes(app: FastifyInstance) {
     return reply.send({ leaderboard });
   });
 
+  // SUPERADMIN: estadísticas de goles pronosticados por participante (desempate #4 del reglamento)
+  app.get('/admin/leagues/:id/goal-stats', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
+    const leagueId = String((req.params as any).id || '').trim();
+
+    const league = await findActiveLeagueById(leagueId);
+    if (!league) return reply.code(404).send({ error: 'League not found' });
+
+    const members = await prisma.leagueMember.findMany({
+      where: { leagueId },
+      include: { user: { select: { id: true, username: true, fullName: true, role: true } } },
+    });
+
+    const [goalSums, pointSums] = await Promise.all([
+      prisma.prediction.groupBy({
+        by: ['userId'],
+        where: { leagueId },
+        _sum: { predHome: true, predAway: true },
+      }),
+      prisma.prediction.groupBy({
+        by: ['userId'],
+        where: { leagueId, points: { not: null } },
+        _sum: { points: true },
+      }),
+    ]);
+
+    const goalsMap = new Map(
+      goalSums.map((g) => [g.userId, (g._sum.predHome ?? 0) + (g._sum.predAway ?? 0)])
+    );
+    const pointsMap = new Map(pointSums.map((p) => [p.userId, p._sum.points ?? 0]));
+
+    const actualGoals = league.actualWorldCupGoals ?? null;
+
+    const participants = members
+      .filter((m) => m.user.role !== 'SUPERADMIN')
+      .map((m) => {
+        const totalGoalsPredicted = goalsMap.get(m.user.id) ?? 0;
+        return {
+          userId: m.user.id,
+          username: m.user.username,
+          fullName: m.user.fullName,
+          displayName: m.user.fullName?.trim() || `@${m.user.username}`,
+          totalPoints: pointsMap.get(m.user.id) ?? 0,
+          totalGoalsPredicted,
+          goalsDiff: actualGoals === null ? null : Math.abs(actualGoals - totalGoalsPredicted),
+        };
+      })
+      .sort((a, b) => b.totalPoints - a.totalPoints || a.displayName.localeCompare(b.displayName));
+
+    return reply.send({
+      actualWorldCupGoals: actualGoals,
+      participants,
+    });
+  });
+
+  // SUPERADMIN: guardar manualmente el total real de goles del Mundial
+  app.patch('/admin/leagues/:id/goal-stats', { preHandler: [app.authenticate, app.requireSuperadmin] }, async (req, reply) => {
+    const leagueId = String((req.params as any).id || '').trim();
+    const parsed = setActualWorldCupGoalsSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid payload', details: parsed.error.flatten() });
+
+    const league = await findActiveLeagueById(leagueId);
+    if (!league) return reply.code(404).send({ error: 'League not found' });
+
+    const updated = await prisma.league.update({
+      where: { id: leagueId },
+      data: { actualWorldCupGoals: parsed.data.actualWorldCupGoals },
+    });
+
+    return reply.send({ actualWorldCupGoals: updated.actualWorldCupGoals });
+  });
+
   // OWNER: set match result + recalc points for all predictions for that match
   app.patch('/leagues/:leagueId/matches/:id/result', { preHandler: [app.authenticate] }, async (req, reply) => {
     const uid = (req.user as any).uid as string;
@@ -1612,6 +1683,35 @@ export async function leagueRoutes(app: FastifyInstance) {
     await prisma.$transaction(updates);
 
     return reply.send({ match, updatedPredictions: preds.length });
+  });
+
+  // OWNER: quitar el resultado de un partido (vuelve a pendiente) y limpiar puntos calculados
+  app.delete('/leagues/:leagueId/matches/:id/result', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const uid = (req.user as any).uid as string;
+    const leagueId = (req.params as any).leagueId as string;
+    const matchId = (req.params as any).id as string;
+
+    const membership = await prisma.leagueMember.findUnique({
+      where: { leagueId_userId: { leagueId, userId: uid } },
+    });
+    if (membership?.role !== 'OWNER') return reply.code(403).send({ error: 'Only league owner can clear results' });
+
+    const existingMatch = await prisma.match.findUnique({ where: { id: matchId } });
+    if (!existingMatch || existingMatch.leagueId !== leagueId) {
+      return reply.code(404).send({ error: 'Match not found in this league' });
+    }
+
+    const match = await prisma.match.update({
+      where: { id: matchId },
+      data: { finalHome: null, finalAway: null, finalPenaltyWinnerIsHome: null },
+    });
+
+    const { count } = await prisma.prediction.updateMany({
+      where: { matchId },
+      data: { points: null },
+    });
+
+    return reply.send({ match, updatedPredictions: count });
   });
 
 }

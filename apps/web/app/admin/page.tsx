@@ -52,6 +52,16 @@ type AdminTeam = {
   logoUrl: string | null;
 };
 
+type GoalStatsParticipant = {
+  userId: string;
+  username: string;
+  fullName: string | null;
+  displayName: string;
+  totalPoints: number;
+  totalGoalsPredicted: number;
+  goalsDiff: number | null;
+};
+
 type LeagueMember = {
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
   joinedAt: string;
@@ -105,11 +115,11 @@ type CsvImportResponse = {
   }>;
 };
 
-type QuinielaSection = 'sistema' | 'usuarios' | 'miembros' | 'equipos' | 'partidos';
+type QuinielaSection = 'sistema' | 'usuarios' | 'miembros' | 'equipos' | 'partidos' | 'goles';
 
 type MatchStatusFilter = 'all' | 'pendiente' | 'con-resultado' | 'cerrado';
 type MatchStatus = 'pendiente' | 'con-resultado' | 'cerrado';
-type AdminNavItem = 'panel' | 'partidos' | 'grupos' | 'equipos' | 'fases' | 'usuarios' | 'resultados';
+type AdminNavItem = 'panel' | 'partidos' | 'grupos' | 'equipos' | 'fases' | 'usuarios' | 'resultados' | 'goles';
 type AdminWorkspace = 'league' | 'system';
 type SystemPanelSection = 'sistema' | 'usuarios' | 'borradas';
 type MatchRow = {
@@ -143,6 +153,7 @@ const ADMIN_NAV_ITEMS: Array<{ id: AdminNavItem; label: string }> = [
   { id: 'fases', label: 'Fases' },
   { id: 'usuarios', label: 'Usuarios' },
   { id: 'resultados', label: 'Resultados' },
+  { id: 'goles', label: 'Goles Mundial' },
 ];
 
 function parseScoreInput(raw: string, label: string) {
@@ -273,6 +284,10 @@ export default function AdminPage() {
   });
   const [leagueMembers, setLeagueMembers] = useState<LeagueMember[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [goalStatsParticipants, setGoalStatsParticipants] = useState<GoalStatsParticipant[]>([]);
+  const [actualWorldCupGoals, setActualWorldCupGoals] = useState<number | null>(null);
+  const [actualWorldCupGoalsInput, setActualWorldCupGoalsInput] = useState('');
+  const [savingWorldCupGoals, setSavingWorldCupGoals] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   const [newLeagueName, setNewLeagueName] = useState('Nueva Quiniela');
@@ -489,6 +504,50 @@ export default function AdminPage() {
 
     const r = await apiFetch<{ league: { members: LeagueMember[] } }>(`/leagues/${currentLeagueId}`);
     setLeagueMembers(r.league.members);
+  }
+
+  async function loadGoalStats(currentLeagueId: string) {
+    if (!currentLeagueId) {
+      setGoalStatsParticipants([]);
+      setActualWorldCupGoals(null);
+      setActualWorldCupGoalsInput('');
+      return;
+    }
+
+    const r = await apiFetch<{ actualWorldCupGoals: number | null; participants: GoalStatsParticipant[] }>(
+      `/admin/leagues/${currentLeagueId}/goal-stats`
+    );
+    setGoalStatsParticipants(r.participants);
+    setActualWorldCupGoals(r.actualWorldCupGoals);
+    setActualWorldCupGoalsInput(r.actualWorldCupGoals === null ? '' : String(r.actualWorldCupGoals));
+  }
+
+  async function saveWorldCupGoals() {
+    if (savingWorldCupGoals) return;
+    if (!leagueId) throw new Error('Selecciona una quiniela');
+
+    const raw = actualWorldCupGoalsInput.trim();
+    let value: number | null = null;
+    if (raw !== '') {
+      if (!/^\d+$/.test(raw)) throw new Error('El total de goles debe ser un número entero');
+      value = Number(raw);
+      if (!Number.isInteger(value) || value < 0 || value > 9999) {
+        throw new Error('El total de goles debe estar entre 0 y 9999');
+      }
+    }
+
+    setMsg(null);
+    setSavingWorldCupGoals(true);
+    try {
+      await apiFetch(`/admin/leagues/${leagueId}/goal-stats`, {
+        method: 'PATCH',
+        body: JSON.stringify({ actualWorldCupGoals: value }),
+      });
+      await loadGoalStats(leagueId);
+      setMsg('Total de goles del Mundial guardado.');
+    } finally {
+      setSavingWorldCupGoals(false);
+    }
   }
 
   async function loadTeams() {
@@ -728,6 +787,38 @@ export default function AdminPage() {
     await loadMatches(leagueId);
   }
 
+  async function clearMatchResult(match: Match) {
+    if (!leagueId) throw new Error('Selecciona una quiniela');
+
+    const confirmed = window.confirm('¿Deseas quitar el resultado de este partido? Volverá a estado pendiente y se borrarán los puntos calculados.');
+    if (!confirmed) return;
+
+    setMsg(null);
+
+    const response = await apiFetch<{ updatedPredictions: number }>(`/leagues/${leagueId}/matches/${match.id}/result`, {
+      method: 'DELETE',
+    });
+
+    setFinalHome((current) => {
+      const next = { ...current };
+      delete next[match.id];
+      return next;
+    });
+    setFinalAway((current) => {
+      const next = { ...current };
+      delete next[match.id];
+      return next;
+    });
+    setFinalPenaltyWinner((current) => {
+      const next = { ...current };
+      delete next[match.id];
+      return next;
+    });
+
+    setMsg(`Resultado eliminado. Pronósticos actualizados: ${response.updatedPredictions}`);
+    await loadMatches(leagueId);
+  }
+
   function clearMatchDashboard() {
     setSelectedMatchIds([]);
     setMatchSearchQuery('');
@@ -812,6 +903,11 @@ export default function AdminPage() {
 
     if (item === 'equipos') {
       goToLeagueSection('equipos', 'equipos');
+      return;
+    }
+
+    if (item === 'goles') {
+      goToLeagueSection('goles', 'goles');
       return;
     }
 
@@ -1138,6 +1234,9 @@ export default function AdminPage() {
     setEditMatchStatus({});
     setEditMatchNotes({});
     setEditLockAutoSync({});
+    setGoalStatsParticipants([]);
+    setActualWorldCupGoals(null);
+    setActualWorldCupGoalsInput('');
     resetTeamForm();
     resetTeamEditForm();
   }, [leagueId]);
@@ -1171,6 +1270,17 @@ export default function AdminPage() {
         await loadLeagueMembers(leagueId);
       } catch (e: any) {
         setMsg(e?.message ?? 'No se pudo cargar miembros de la quiniela');
+      }
+    })();
+  }, [leagueId]);
+
+  useEffect(() => {
+    if (!leagueId) return;
+    (async () => {
+      try {
+        await loadGoalStats(leagueId);
+      } catch (e: any) {
+        setMsg(e?.message ?? 'No se pudo cargar las estadísticas de goles');
       }
     })();
   }, [leagueId]);
@@ -1867,6 +1977,16 @@ export default function AdminPage() {
                                   {isMenuOpen && (
                                     <div className="admin-dashboard-row-menu">
                                       <button type="button" onClick={() => openMatchEditor(row)}>Editar partido</button>
+                                      {row.match.finalHome !== null && row.match.finalAway !== null && (
+                                        <button type="button" onClick={async () => {
+                                          setOpenMatchMenuId(null);
+                                          try {
+                                            await clearMatchResult(row.match);
+                                          } catch (e: any) {
+                                            setMsg(e?.message ?? 'No se pudo quitar el resultado');
+                                          }
+                                        }}>Quitar resultado</button>
+                                      )}
                                       <button type="button" className="danger" onClick={async () => {
                                         setOpenMatchMenuId(null);
                                         try {
@@ -2649,6 +2769,115 @@ export default function AdminPage() {
                         </Fragment>
                       );
                     })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {showLeagueEditor && quinielaSection === 'goles' && (
+          <div className="admin-goal-stats">
+            <div className="card" style={{ marginTop: 0 }}>
+              <h3 style={{ marginTop: 0 }}>Goles reales del Mundial</h3>
+              <p className="small" style={{ marginTop: 0 }}>
+                Ingresa manualmente el total de goles anotados en el Mundial. Se usa para el desempate #4 del
+                reglamento: gana quien pronosticó un total de goles más cercano a este número.
+              </p>
+              <div className="label">Total de goles reales</div>
+              <div className="row-actions">
+                <input
+                  className="input"
+                  style={{ maxWidth: 160 }}
+                  inputMode="numeric"
+                  placeholder="Ej: 172"
+                  value={actualWorldCupGoalsInput}
+                  onChange={(e) => setActualWorldCupGoalsInput(e.target.value)}
+                />
+                <button
+                  className="btn primary admin-equal-btn"
+                  disabled={savingWorldCupGoals}
+                  onClick={async () => {
+                    try {
+                      await saveWorldCupGoals();
+                    } catch (e: any) {
+                      setMsg(e?.message ?? 'No se pudo guardar el total de goles');
+                    }
+                  }}
+                >
+                  {savingWorldCupGoals ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+              {actualWorldCupGoals !== null && (
+                <p className="small" style={{ marginTop: 8, marginBottom: 0 }}>
+                  Valor guardado actualmente: <b>{actualWorldCupGoals}</b> goles.
+                </p>
+              )}
+            </div>
+
+            <div className="card">
+              <h3 style={{ marginTop: 0 }}>Top 5 ganadores hasta el momento</h3>
+              <p className="small" style={{ marginTop: 0 }}>
+                Ordenados por puntos totales de la quiniela activa.
+              </p>
+              {!leagueId ? (
+                <p className="small" style={{ margin: 0 }}>Selecciona una quiniela para ver los líderes.</p>
+              ) : !goalStatsParticipants.length ? (
+                <p className="small" style={{ margin: 0 }}>Esta quiniela aún no tiene participantes con pronósticos.</p>
+              ) : (
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Usuario</th>
+                      <th>Puntos</th>
+                      <th>Goles pronosticados</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {goalStatsParticipants.slice(0, 5).map((p, idx) => (
+                      <tr key={p.userId}>
+                        <td>{idx + 1}</td>
+                        <td>{p.displayName}</td>
+                        <td><b>{p.totalPoints}</b></td>
+                        <td>{p.totalGoalsPredicted}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="card">
+              <h3 style={{ marginTop: 0 }}>Goles pronosticados por participante</h3>
+              <p className="small" style={{ marginTop: 0 }}>
+                Suma de todos los goles (local + visitante) que cada participante puso en sus pronósticos.
+              </p>
+              {!leagueId ? (
+                <p className="small" style={{ margin: 0 }}>Selecciona una quiniela para ver esta información.</p>
+              ) : !goalStatsParticipants.length ? (
+                <p className="small" style={{ margin: 0 }}>Esta quiniela aún no tiene participantes con pronósticos.</p>
+              ) : (
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Usuario</th>
+                      <th>Puntos</th>
+                      <th>Goles pronosticados</th>
+                      <th>Diferencia vs. goles reales</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {goalStatsParticipants.map((p, idx) => (
+                      <tr key={p.userId}>
+                        <td>{idx + 1}</td>
+                        <td>{p.displayName}</td>
+                        <td>{p.totalPoints}</td>
+                        <td>{p.totalGoalsPredicted}</td>
+                        <td>{p.goalsDiff === null ? '-' : p.goalsDiff}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               )}

@@ -104,6 +104,10 @@ const imageHttpUrlSchema = z.string().url().refine((url) => {
 }, { message: 'logoUrl must be a direct image URL' });
 const teamImageSchema = z.union([imageHttpUrlSchema, imageDataUrlSchema]);
 
+export const setActualWorldCupGoalsSchema = z.object({
+  actualWorldCupGoals: z.number().int().min(0).max(9999).nullable(),
+});
+
 export const adminLeagueTeamSchema = z.object({
   leagueId: z.string().min(3),
   name: z.string().min(2).max(64),
